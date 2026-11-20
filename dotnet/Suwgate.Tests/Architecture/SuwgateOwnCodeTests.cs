@@ -1,3 +1,4 @@
+using Suwgate.Architecture.Build;
 using Suwgate.Architecture.Code;
 using Suwgate.Architecture.Design;
 using Suwgate.Architecture.Sources;
@@ -26,4 +27,7 @@ public sealed class SuwgateOwnCodeTests
             new IGuard[] { new OneTypePerFile(Repository.Value.CSharpSources()), new NoEscapeHatches(Repository.Value.CSharpSources()) },
             Guards.Verify
         );
+
+    [Fact]
+    public void Its_build_keeps_the_defaults_it_ships() => Guards.Verify(new BuildSettings(Repository.Value));
 }

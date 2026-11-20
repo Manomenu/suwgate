@@ -17,7 +17,8 @@ One line per top-level folder (at most 300 characters each).
 
 Files at the root: `suwgate.yml` (this repository's own gate), `package.json`, `tsconfig.json` (all TypeScript, checked),
 `tsconfig.build.json` (what `tsc` emits into `dist/`), `vitest.config.ts`, `eslint.config.js`, `knip.json`, `.prettierrc.json`,
-`Suwgate.slnx`, `Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`, `BannedSymbols.txt`.
+`Suwgate.slnx`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, `nuget.config`,
+`BannedSymbols.txt`.
 
 ## How a check runs
 
@@ -112,12 +113,12 @@ The `boundaries` rule of `eslint.config.js` keeps the contracts honest:
 
 ## Disabled lint and analyzer rules, and why
 
-| Rule                                                   | Why                                                                                                           |
-| :----------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
-| `restrict-template-expressions` allows numbers         | messages and report lines are built from counts and seconds                                                   |
-| `no-confusing-void-expression` ignores arrow shorthand | `(error) => reject(error)` style callbacks read better without braces                                         |
-| `no-unused-vars` ignores rest siblings                 | dropping a key with `const { a: _, ...rest }` is on purpose                                                   |
-| CA1707, CA1515, CA1812 off in `dotnet/Suwgate.Tests`   | test names use underscores, test classes are public for xUnit, sample types are inspected, never instantiated |
+| Rule                                                   | Why                                                                   |
+| :----------------------------------------------------- | :-------------------------------------------------------------------- |
+| `restrict-template-expressions` allows numbers         | messages and report lines are built from counts and seconds           |
+| `no-confusing-void-expression` ignores arrow shorthand | `(error) => reject(error)` style callbacks read better without braces |
+| `no-unused-vars` ignores rest siblings                 | dropping a key with `const { a: _, ...rest }` is on purpose           |
+| CA1812 off in `dotnet/Suwgate.Tests`                   | sample types are inspected, never instantiated                        |
 
 ## Decisions the code relies on
 
@@ -132,5 +133,8 @@ The `boundaries` rule of `eslint.config.js` keeps the contracts honest:
   from `src/gate/` and `dist/gate/`.
 - The .NET packages read `suwgate.yml` with YamlDotNet and check only what they need (each exception has a guard, a target and a
   reason): the CLI validates the whole file against the schema.
-- xUnit's generated entry point blocks on a task; `XUNIT_GENERATED_DISABLE_WARNINGS` in the test project is xUnit's own switch to
-  keep the banned-API analyzer off that generated file, because editorconfig severities do not reach it.
+- suwgate builds with the defaults `Suwgate.Architecture` ships: `Directory.Build.props` and `Directory.Build.targets` import the
+  package's buildTransitive files from the sources, so the repository is checked by the rules every application gets.
+- xUnit's generated entry point blocks on a task; `XUNIT_GENERATED_DISABLE_WARNINGS`, which the package defines in every test
+  project, is xUnit's own switch to keep the banned-API analyzer off that generated file, because editorconfig severities do not
+  reach it.
