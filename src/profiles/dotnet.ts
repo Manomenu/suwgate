@@ -25,7 +25,12 @@ export const NO_IDLE_BUILD_PROCESSES = "export MSBUILDDISABLENODEREUSE=1 DOTNET_
 
 const BUILD = `${NO_IDLE_BUILD_PROCESSES} && dotnet build --nologo -v quiet`;
 
-const TEST_OPTIONS = '--no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
+const REPORT_NAMES = "$run/report-names.targets";
+
+const REPORT_NAMES_TARGETS =
+    "<Project><PropertyGroup><TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --report-xunit-xml-filename &quot;$(MSBuildProjectName).$(TargetFramework).xunit.xml&quot;</TestingPlatformCommandLineArguments></PropertyGroup></Project>";
+
+const TEST_OPTIONS = `-p:CustomAfterMicrosoftCommonTargets="${REPORT_NAMES}" --no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"`;
 
 const ONLY_AN_EMPTY_RUN_FAILS = "${1:+--ignore-exit-code 8}";
 
@@ -88,6 +93,7 @@ export function witnessed(context: StepContext, tests: string): string {
     return [
         runDirectory(DOTNET_TEST),
         'export SUWGATE_EVIDENCE="$run/evidence"',
+        `printf '%s' ${quoted(REPORT_NAMES_TARGETS)} >"${REPORT_NAMES}"`,
         tests,
         verdictCommand(`tests xunit "$run/results" ${quoted("dotnet test")}`),
         `{ [ $# -gt 0 ] || ${verdictCommand(`guards "$run/evidence" ${requiredGuards(context).map(quoted).join(" ")}`)}; }`,

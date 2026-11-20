@@ -296,7 +296,10 @@ A check counts only when the tool shows it ran, not because a file or a line of 
   stylesheet that module imports. Both read the sources: the evidence (a run hitting `/health`, a built stylesheet with the
   kit's tokens) needs a running server or a production build, which the gate does not have in every repository.
 - The reports live in a temporary folder of the run (`SUWGATE_RUN`), deleted when `suwgate check` ends. `dotnet-test` asks xUnit
-  for its XML report (`--report-xunit-xml`), so every .NET test project tests with xUnit v3.
+  for its XML report (`--report-xunit-xml`), so every .NET test project tests with xUnit v3. Each test project writes its own
+  report, `<project>.<target framework>.xunit.xml` (`--report-xunit-xml-filename` through `TestingPlatformCommandLineArguments`,
+  from a targets file the step passes as `-p:CustomAfterMicrosoftCommonTargets`): xUnit's own name is the moment the project
+  started, which two projects that start together share, and one report would overwrite the other.
 
 `suwgate dev db|logs|smoke|server|tmux|checkout-env` runs the local stack of the template (database, logs, smoke test, server, tmux
 session, worktree databases) from a `dev` section of `suwgate.yml`: [docs/dev.md](docs/dev.md).
