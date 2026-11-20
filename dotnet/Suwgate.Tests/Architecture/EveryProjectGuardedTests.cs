@@ -63,6 +63,27 @@ public sealed class EveryProjectGuardedTests
     }
 
     [Fact]
+    public void A_project_that_builds_under_another_assembly_name_is_read_by_that_name()
+    {
+        using var repository = new TemporaryRepository(
+            new Dictionary<string, string>
+            {
+                ["layers.json"] = """{ "projects": { "Sample.Cli": { "layers": ["Api"] }, "Sample.Other": { "layers": ["Api"] } } }""",
+                ["Sample.Cli/Sample.Cli.csproj"] =
+                    "<Project><PropertyGroup><AssemblyName>Sample.Guarded</AssemblyName></PropertyGroup></Project>",
+                ["Sample.Other/Sample.Other.csproj"] =
+                    "<Project><PropertyGroup><AssemblyName>$(MSBuildProjectName)</AssemblyName></PropertyGroup></Project>",
+            }
+        );
+        var layers = LayersFile.Read(repository.Files, "layers.json");
+
+        Assert.Equal("Sample.Guarded", layers.AssemblyNameOf("Sample.Cli"));
+        Assert.Equal("Sample.Other", layers.AssemblyNameOf("Sample.Other"));
+        Assert.Equal("Sample.Missing", layers.AssemblyNameOf("Sample.Missing"));
+        Assert.Equal(["Sample.Other"], new EveryProjectGuarded(layers, Server).Check().Select(finding => finding.Target));
+    }
+
+    [Fact]
     public void Every_finding_can_be_excepted_and_a_stale_exception_fails() =>
         GuardAssert.HonoursExceptions(new EveryProjectGuarded(Layers, Server));
 }

@@ -102,7 +102,8 @@ listed with what it may reference and show its internals to; a production projec
 namespace segment under the project's name, with `|` between the parts of one level (they may not use each other). A project
 whose name ends with `.Tests` needs no layers, and neither does the gate: a project whose assembly references
 `Suwgate.Architecture` or `Suwgate.Database` is a test project of the guards (a production project takes the package for its
-build only), so `architecture/every-project-guarded` skips it without an exception.
+build only), so `architecture/every-project-guarded` skips it without an exception. A project that builds under another name (`<AssemblyName>` in its
+`.csproj`) is matched by that name when the layers file was read with `LayersFile.Read(repository, path)`.
 
 ```json
 {

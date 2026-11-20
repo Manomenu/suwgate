@@ -1,8 +1,9 @@
 using System.Text.Json;
+using System.Xml.Linq;
 
 namespace Suwgate.Architecture.Sources;
 
-public sealed class LayersFile(string path, IReadOnlyDictionary<string, ProjectRules> projects)
+public sealed class LayersFile(string path, IReadOnlyDictionary<string, ProjectRules> projects, RepositoryFiles? repository = null)
 {
     public string Path => path;
 
@@ -11,7 +12,7 @@ public sealed class LayersFile(string path, IReadOnlyDictionary<string, ProjectR
     public static LayersFile Read(RepositoryFiles repository, string path)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        return Parse(path, repository.Read(path));
+        return new(path, Parse(path, repository.Read(path)).Projects, repository);
     }
 
     public static LayersFile Parse(string path, string json)
@@ -41,6 +42,25 @@ public sealed class LayersFile(string path, IReadOnlyDictionary<string, ProjectR
         projects.TryGetValue(project, out var rules)
             ? [.. rules.Layers.Select(level => level.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))]
             : [];
+
+    public string AssemblyNameOf(string project)
+    {
+        var file = repository?.Paths.FirstOrDefault(candidate =>
+            System.IO.Path.GetFileName(candidate) == project + ".csproj"
+            && !candidate.Contains("/obj/", StringComparison.Ordinal)
+            && !candidate.Contains("/bin/", StringComparison.Ordinal)
+        );
+        if (repository is null || file is null)
+        {
+            return project;
+        }
+        var name = XDocument
+            .Parse(repository.Read(file))
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "AssemblyName")
+            ?.Value.Trim();
+        return string.IsNullOrEmpty(name) || name.Contains("$(", StringComparison.Ordinal) ? project : name;
+    }
 
     private static string[] Strings(string path, JsonProperty project, string name)
     {
