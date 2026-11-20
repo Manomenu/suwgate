@@ -189,6 +189,14 @@ A check counts only when the tool shows it ran, not because a file or a line of 
   an override that turns one off fails, naming the option.
 - `lint` reads `eslint --print-config` of a source file of `src/`: `suwgate/no-comments` and `boundaries/dependencies` must be
   errors there.
+- `criteria-ran`, after the test steps: every acceptance criterion of a living spec (`docs/visual/spec/`) that a test names
+  (`[Trait("criterion", "<id>")]`, a title or story name `"<id>: …"`) must have a test naming it that ran and passed in this run,
+  by the reports of xUnit, Vitest and Playwright. A criterion named only by tests of a step `steps.skip` names is not checked.
+- The kits are wired, not only installed: `suwbackkit-wiring` (dotnet) asks a web server that references `Suwbackkit.Server` to
+  call `AddServerDefaults` and `MapServerDefaults`; `suwfrontkit-wiring` (web, library) asks an app whose `package.json` depends
+  on `@maniumek/suwfrontkit` to load `@maniumek/suwfrontkit/theme.css` from the main module of its `index.html`, or from a
+  stylesheet that module imports. Both read the sources: the evidence (a run hitting `/health`, a built stylesheet with the
+  kit's tokens) needs a running server or a production build, which the gate does not have in every repository.
 - The reports live in a temporary folder of the run (`SUWGATE_RUN`), deleted when `suwgate check` ends. `dotnet-test` asks xUnit
   for its XML report (`--report-xunit-xml`), so every .NET test project tests with xUnit v3.
 

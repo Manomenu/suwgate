@@ -9,7 +9,8 @@ import type { StepContext } from "../gate/contract.ts";
 import { witnessed } from "./dotnet.ts";
 import { dotnetGuards, requiredGuards } from "./dotnetGuards.ts";
 import { countedVitest } from "./shell.ts";
-import { eslintVerdict, guardsVerdict, playwrightRun, testsVerdict, tsconfigVerdict, verdict, vitestRun, xunitRun } from "./verdict.ts";
+import { playwrightRun, vitestRun, xunitRun } from "./reports.ts";
+import { eslintVerdict, guardsVerdict, testsVerdict, tsconfigVerdict, verdict } from "./verdict.ts";
 
 const folders: string[] = [];
 

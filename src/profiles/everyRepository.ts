@@ -1,5 +1,6 @@
 import type { Step } from "../gate/contract.ts";
 import { criteriaStep } from "./criteria.ts";
+import { criteriaRanStep } from "./criteriaRan.ts";
 import { composeFile } from "./database.ts";
 import { withChanged } from "./shell.ts";
 
@@ -14,6 +15,7 @@ export const everyRepositorySteps: readonly Step[] = [
         limitSeconds: 120,
     },
     criteriaStep,
+    criteriaRanStep,
     {
         id: "shellcheck",
         title: "shell scripts (shellcheck)",

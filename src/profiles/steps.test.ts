@@ -85,6 +85,7 @@ describe("the steps of the profiles", () => {
             "database-up",
             "compose",
             "criteria",
+            "criteria-ran",
             "shellcheck",
             "gitleaks",
         ]);
@@ -103,6 +104,7 @@ describe("the steps of the profiles", () => {
             "changeset",
             "compose",
             "criteria",
+            "criteria-ran",
             "shellcheck",
             "gitleaks",
         ]);

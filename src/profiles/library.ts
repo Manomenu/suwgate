@@ -1,6 +1,6 @@
 import type { Step, StepContext } from "../gate/contract.ts";
 import { PNPM_INSTALL } from "./node.ts";
-import { countedVitest, has, quoted, read, script } from "./shell.ts";
+import { countedPlaywright, countedVitest, has, quoted, read, runDirectory, script, verdictCommand } from "./shell.ts";
 
 const CHANGESET = script([
     'base=""',
@@ -31,7 +31,10 @@ function consumerAppCommand(build: string): string {
         `cp -r ${CONSUMER}/app "$work/app"`,
         `(cd "$work/app" && pnpm add "$tarball" --silent && ${build})`,
         `port="$(node -e 'const server = require("node:net").createServer().listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });')"`,
-        `CONSUMER_APP="$work/app" CONSUMER_PORT="$port" pnpm exec playwright test -c ${CONSUMER}/playwright.config.ts`,
+        countedPlaywright(
+            "consumer-app",
+            `CONSUMER_APP="$work/app" CONSUMER_PORT="$port" pnpm exec playwright test -c ${CONSUMER}/playwright.config.ts`,
+        ).join(" && "),
     ]);
 }
 
@@ -52,10 +55,12 @@ export function visual(context: StepContext): string | null {
     if (version === null) {
         return `echo "${VISUAL_CONFIG} runs in the Playwright image of the installed @playwright/test, which is not installed: pnpm add -D @playwright/test" >&2; exit 1`;
     }
-    return script([
+    return [
         "pnpm exec storybook build --quiet -o storybook-static >/dev/null",
-        `docker run --rm --init --ipc=host --security-opt label=disable -v "$PWD:/work" -w /work -e CI mcr.microsoft.com/playwright:v${version}-noble node_modules/.bin/playwright test -c ${VISUAL_CONFIG}`,
-    ]);
+        runDirectory("visual"),
+        `docker run --rm --init --ipc=host --security-opt label=disable -v "$PWD:/work" -v "$run:/suwgate-run" -w /work -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/suwgate-run/playwright.json mcr.microsoft.com/playwright:v${version}-noble node_modules/.bin/playwright test -c ${VISUAL_CONFIG} --reporter=line,json`,
+        verdictCommand(`tests playwright "$run/playwright.json" ${quoted("playwright (visual)")}`),
+    ].join(" && ");
 }
 
 const NOT_A_MODULE = /\.(css|json)$/;
