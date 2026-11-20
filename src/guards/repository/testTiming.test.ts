@@ -24,9 +24,6 @@ describe("test-timing", () => {
         "System.Threading.Thread.Sleep(100);",
         "await Task.Delay(500);",
         "await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);",
-        "cts.CancelAfter(TimeSpan.FromSeconds(5));",
-        "using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));",
-        "await reply.WaitAsync(TimeSpan.FromSeconds(10));",
     ])("finds a .NET test that measures, sleeps on or limits real time: %s", async (body) => {
         expect(await csharp(body)).toEqual([`${TEST}:6`]);
     });
@@ -47,12 +44,15 @@ describe("test-timing", () => {
         "for (var attempt = 0; attempt < 10; attempt++) await Task.Delay(50);",
         "do\n        {\n            await Task.Delay(50);\n        } while (!saved.IsCompleted);",
         "using var cts = new CancellationTokenSource();",
+        "cts.CancelAfter(TimeSpan.FromSeconds(5));",
+        "using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));",
+        "await reply.WaitAsync(TimeSpan.FromSeconds(10));",
         "using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5), clock);",
         "await reply.WaitAsync(TestContext.Current.CancellationToken);",
         'var text = "DateTime.Now and Thread.Sleep(5) are only words here";',
         'var json = """\n        { "at": "DateTime.UtcNow", "wait": "Task.Delay(5)" }\n        """;',
         "var due = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);",
-    ])("passes a .NET test on a fake clock, a polling loop or a time only in text: %s", async (body) => {
+    ])("passes a .NET test on a fake clock, a polling loop, a ceiling against a hang or a time only in text: %s", async (body) => {
         expect(await csharp(body)).toEqual([]);
     });
 
