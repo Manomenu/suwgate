@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { PROFILES } from "../gate/contract.ts";
 import { guards } from "./index.ts";
+import { isPath } from "./repository/docsPaths.ts";
 
 describe("the registry of guards", () => {
     it("gives every guard a unique kebab-case id that cannot be mistaken for a .NET guard's", () => {
@@ -9,6 +10,10 @@ describe("the registry of guards", () => {
 
         expect(ids.filter((id) => !/^[a-z][a-z0-9-]*$/.test(id))).toEqual([]);
         expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+    });
+
+    it("gives no guard an id that docs-paths would read as a path", () => {
+        expect(guards.map((guard) => guard.id).filter(isPath)).toEqual([]);
     });
 
     it("names only real profiles and describes every guard", () => {

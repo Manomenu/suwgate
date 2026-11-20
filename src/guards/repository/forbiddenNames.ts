@@ -2,7 +2,6 @@ import { PROFILES, type Guard, type Profile } from "../../gate/contract.ts";
 import { matchesAny, stringList } from "./text.ts";
 
 const EVERY_REPOSITORY = [
-    "base",
     "common",
     "core",
     "helper",
@@ -24,6 +23,8 @@ export const FORBIDDEN_BY_PROFILE: Readonly<Record<Profile, readonly string[]>> 
     dotnet: ["application", "controllers", "domain", "dtos", "infrastructure", "interfaces", "models", "repositories", "services"],
     database: [],
 };
+
+const FOLDERS_ONLY = ["base"];
 
 const NOT_READ = ["docs/visual/**"];
 
@@ -63,7 +64,10 @@ export const forbiddenNames: Guard = {
     check(context) {
         const settings = (context.settings ?? {}) as Settings;
         const vague = [...EVERY_REPOSITORY, ...(settings.words ?? []).map((word) => word.toLowerCase())];
-        const byKind = PROFILES.filter((profile) => context.profiles.includes(profile)).flatMap((profile) => FORBIDDEN_BY_PROFILE[profile]);
+        const byKind = [
+            ...FOLDERS_ONLY,
+            ...PROFILES.filter((profile) => context.profiles.includes(profile)).flatMap((profile) => FORBIDDEN_BY_PROFILE[profile]),
+        ];
         const ignored = [...NOT_READ, ...(settings.ignore ?? [])];
         return namedPaths(context.files.filter((file) => !matchesAny(file, ignored))).flatMap(({ named, isFolderOrProject }) => {
             const name = named.split("/").at(-1) ?? named;

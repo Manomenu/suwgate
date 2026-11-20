@@ -1,6 +1,8 @@
+import { execFileSync } from "node:child_process";
+
 import { describe, expect, it } from "vitest";
 
-import { docsPaths } from "./docsPaths.ts";
+import { DOTNET_GUARD_IDS, docsPaths } from "./docsPaths.ts";
 import { findingsOf, shown } from "./testRepository.ts";
 
 const FILES = {
@@ -53,6 +55,26 @@ describe("docs-paths", () => {
         expect(await stale("`gone/file.ts`", "README.md", { ignore: ["gone/file.ts"] })).toEqual([]);
         expect(await stale("`.artifacts/nupkg`", "README.md", { ignore: [".artifacts/"] })).toEqual([]);
         expect(await stale("`.artifacts/nupkg`", "README.md", { ignore: [".artifacts"] })).toEqual(["README.md:1"]);
+    });
+
+    it("skips the documents settings.skip names by glob", async () => {
+        expect(await stale("`gone/file.ts`", "docs/notes/a.md", { skip: ["docs/notes/**"] })).toEqual([]);
+        expect(await stale("`gone/file.ts`", "docs/a.md", { skip: ["docs/notes/**"] })).toEqual(["docs/a.md:1"]);
+    });
+
+    it("reads a .NET guard id as a guard, not as a path", async () => {
+        expect(await stale("`architecture/layers` and `database/migration-script-names`")).toEqual([]);
+        expect(await stale("`architecture/layer`")).toEqual(["README.md:1"]);
+    });
+
+    it("knows every .NET guard id the packages declare", () => {
+        const declared = execFileSync("git", ["grep", "-h", "-o", "-E", 'GuardId = "[a-z/-]+"', "--", "dotnet/*.cs"], { encoding: "utf8" })
+            .split("\n")
+            .filter((line) => line !== "")
+            .map((line) => line.replace(/^GuardId = "|"$/g, ""))
+            .sort();
+
+        expect([...DOTNET_GUARD_IDS].sort()).toEqual(declared);
     });
 
     it("names the document as the target and says how to fix it", async () => {

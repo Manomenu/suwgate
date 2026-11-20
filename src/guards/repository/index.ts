@@ -2,6 +2,7 @@ import type { Guard } from "../../gate/contract.ts";
 import { agentsFile } from "./agentsFile.ts";
 import { bannedNpmPackages } from "./bannedNpmPackages.ts";
 import { composePorts } from "./composePorts.ts";
+import { configContents } from "./configContents.ts";
 import { dependencyDirection } from "./dependencyDirection.ts";
 import { docsPaths } from "./docsPaths.ts";
 import { forbiddenNames } from "./forbiddenNames.ts";
@@ -17,6 +18,7 @@ import { vsCodeSettings } from "./vsCodeSettings.ts";
 
 export const repositoryGuards: readonly Guard[] = [
     requiredFiles,
+    configContents,
     agentsFile,
     docsPaths,
     forbiddenNames,

@@ -6,7 +6,7 @@ export const DATABASE_UP = "database-up";
 const COMPOSE_FILES = ["compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"];
 
 const UP = script([
-    'if [ -n "${CI:-}" ]; then echo "CI: the workflow provides the database as a service"; exit 0; fi',
+    'if [ -n "${CI:-}" ]; then echo "CI: the workflow starts the database (database: true of the reusable gate workflow)"; exit 0; fi',
     "docker compose --profile db up -d --wait db >/dev/null 2>&1 || {",
     '    echo "postgres did not start — see: docker compose --profile db logs db" >&2',
     "    exit 1",
@@ -20,7 +20,7 @@ export function composeFile(context: StepContext): boolean {
 export const databaseSteps: readonly Step[] = [
     {
         id: DATABASE_UP,
-        title: "the local database for the tests (docker compose --profile db up --wait db; CI provides its own)",
+        title: "the local database for the tests (docker compose --profile db up --wait db; in CI the workflow starts it)",
         profile: "database",
         needs: ["docker"],
         run: (context) => (composeFile(context) ? UP : null),

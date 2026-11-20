@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Profile, Run, Step, StepContext } from "../gate/contract.ts";
 import { contractPins, apiContract } from "./contract.ts";
 import { criteria, criteriaConfig } from "./criteria.ts";
-import { guardTests } from "./dotnet.ts";
+import { guardTests, inCheckoutEnv } from "./dotnet.ts";
 import { stepsFor } from "./index.ts";
 import { attw, consumerApp, visual } from "./library.ts";
 import { typecheck, unitTests } from "./node.ts";
@@ -239,6 +239,41 @@ describe("dotnet-test --quick", () => {
             "dotnet test --project 'dotnet/Suwgate.Tests/Suwgate.Tests.csproj' --no-build --no-progress",
         );
     });
+
+    it("finds a gate project that references the guards with Update, as the Suwgate.Architecture README tells it to", () => {
+        const root = repository({
+            "Myapp.Gate/Myapp.Gate.csproj": '<PackageReference Include="xunit.v3" /><PackageReference Update="Suwgate.Architecture" />',
+        });
+
+        expect(guardTests(context(root, { changed: ["Myapp.Gate/A.cs"] }))).toBe(
+            "dotnet test --project 'Myapp.Gate/Myapp.Gate.csproj' --no-build --no-progress",
+        );
+    });
+});
+
+describe("the .NET steps", () => {
+    it("leave no idle MSBuild worker or build server behind", () => {
+        const root = repository({ "suwgate.yml": "profiles: [dotnet]\n" });
+        const at = context(root, { profile: "dotnet", changed: ["A.cs"] });
+
+        for (const id of ["dotnet-build", "dotnet-format", "dotnet-test"]) {
+            expect(line(step(id).run, at)).toContain("export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0 && ");
+        }
+        expect(line(step("dotnet-format").quick, at)).toContain("export MSBUILDDISABLENODEREUSE=1");
+    });
+
+    it("run the tests with the checkout's variables when suwgate.yml has a dev section", () => {
+        const root = repository({ "suwgate.yml": "profiles: [dotnet]\ndev:\n  name: myapp\n" });
+        vi.stubEnv("CI", "");
+        vi.stubEnv("E2E_DATABASE", "");
+        const command = inCheckoutEnv(context(root, { profile: "dotnet" }), 'echo "$MSBUILDDISABLENODEREUSE $E2E_DATABASE"');
+
+        expect(command).toContain("dev checkout-env");
+        expect(execFileSync("bash", ["-c", command], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()).toBe(
+            "1 myapp_e2e",
+        );
+        expect(inCheckoutEnv(context(repository({ "suwgate.yml": "profiles: [dotnet]\n" })), "dotnet test")).not.toContain("checkout-env");
+    });
 });
 
 describe("database-up and compose", () => {
@@ -262,6 +297,43 @@ describe("e2e", () => {
             "pnpm exec playwright test -c e2e/playwright.config.ts",
         );
         expect(line(step("e2e").run, context(repository({}), { profile: "web" }))).toBeNull();
+    });
+
+    it("with a dev section, gives the tests a fresh database of this checkout first, then runs them with its variables", () => {
+        const root = repository({
+            "suwgate.yml": "profiles: [web, dotnet, database]\ndirectories:\n  web: Myapp.Web\ndev:\n  name: myapp\n",
+            "compose.yaml": "services: {}\n",
+            "Myapp.Web/e2e/playwright.config.ts": "",
+            "bin/docker": '#!/usr/bin/env bash\necho "docker $*" >>"$CALLS"\n',
+            "bin/pnpm": '#!/usr/bin/env bash\necho "pnpm $* $E2E_DATABASE $E2E_SERVER_PORT" >>"$CALLS"\n',
+        });
+        execFileSync("chmod", ["+x", "bin/docker", "bin/pnpm"], { cwd: root });
+        const at = context(root, { profile: "web", directories: { web: "Myapp.Web" } });
+        const command = line(step("e2e").run, at);
+        if (typeof command !== "string") throw new Error("no command");
+        const calls = path.join(root, "calls.log");
+        const bin = `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`;
+        const env = { ...process.env, PATH: bin, CALLS: calls, CI: "", E2E_DATABASE: "", E2E_SERVER_PORT: "" };
+        execFileSync("bash", ["-c", command], { cwd: at.cwd, env, stdio: ["ignore", "ignore", "ignore"] });
+
+        const log = readFileSync(calls, "utf8").trim().split("\n");
+        expect(log[0]).toMatch(/^docker compose .* up -d --wait db$/);
+        expect(log[1]).toMatch(
+            /exec -T db psql .* -d postgres -c DROP DATABASE IF EXISTS myapp_e2e WITH \(FORCE\) -c CREATE DATABASE myapp_e2e$/,
+        );
+        expect(log[2]).toMatch(/^pnpm exec playwright test -c e2e\/playwright.config.ts myapp_e2e \d+$/);
+        expect(existsSync(path.join(root, ".artifacts/logs"))).toBe(true);
+    });
+
+    it("refuses to recreate a database whose name lacks e2e", () => {
+        const root = repository({ "suwgate.yml": "dev:\n  name: myapp\n", "e2e/playwright.config.ts": "" });
+        const command = line(step("e2e").run, context(root, { profile: "web" }));
+        if (typeof command !== "string") throw new Error("no command");
+
+        const run = spawnSync("bash", ["-c", command], { cwd: root, env: { ...process.env, E2E_DATABASE: "myapp" }, encoding: "utf8" });
+
+        expect(run.status).toBe(2);
+        expect(run.stderr).toContain('E2E_DATABASE is "myapp": the e2e step drops and recreates it');
     });
 });
 

@@ -30,6 +30,8 @@ describe("required-files", () => {
             ]),
         );
         expect(files("dotnet")).toContain("layers.json");
+        expect(files("dotnet")).toContain("Directory.Build.rsp");
+        expect(files("dotnet")).not.toContain(".csharpierrc.json");
         expect(EVERY).not.toContain("criteria.json");
         expect(files("dotnet")).not.toContain("BannedSymbols.txt");
         expect(files("web")).toContain("knip.config.ts");
@@ -38,7 +40,7 @@ describe("required-files", () => {
 
     it("adds each profile's files, and only for the profiles the repository has", async () => {
         expect(await missing(["web"], EVERY)).toEqual(files("web"));
-        expect(await missing(["dotnet", "database"], [...EVERY, ...files("dotnet")])).toEqual(["compose.yaml"]);
+        expect(await missing(["dotnet", "database"], [...EVERY, ...files("dotnet"), "Myapp.slnx"])).toEqual(["compose.yaml"]);
         expect(await missing(["web", "library"], [...EVERY, ...files("web")])).toEqual(["LICENSE", ".changeset/config.json"]);
     });
 
@@ -57,6 +59,28 @@ describe("required-files", () => {
                 directories: { web: "Myapp.Web" },
             }),
         ).toEqual([]);
+    });
+
+    it("asks the dotnet profile for exactly one .slnx in its directory", async () => {
+        const dotnet = [...EVERY, ...files("dotnet").map((file) => `Myapp/${file}`)];
+        const extra = { directories: { dotnet: "Myapp" } };
+        const findings = async (present: string[]) =>
+            (await requiredFiles.check(context(["dotnet"], [...dotnet, ...present], extra))).map((finding) => [
+                finding.target,
+                finding.message,
+            ]);
+
+        expect(await findings(["Myapp/Myapp.slnx"])).toEqual([]);
+        expect(await findings(["Myapp.slnx", "Myapp/Sub/Other.slnx"])).toEqual([
+            ["Myapp/*.slnx", expect.stringContaining("missing: the one solution file that dotnet build and dotnet test find")],
+        ]);
+        expect(await findings(["Myapp/A.slnx", "Myapp/B.slnx"])).toEqual([
+            [
+                "Myapp/*.slnx",
+                "2 solution files (A.slnx, B.slnx): keep one, because dotnet build and dotnet test refuse to choose between them",
+            ],
+        ]);
+        expect(await missing(["web"], [...EVERY, ...files("web")])).toEqual([]);
     });
 
     it("takes more files from its settings", async () => {

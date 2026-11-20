@@ -27,7 +27,7 @@ function settingsFindings(text: string): Finding[] {
         .filter(isStyleKey)
         .map((key) => ({
             target: SETTINGS,
-            message: `${key} is a style rule only VS Code reads: move it to .editorconfig, .prettierrc.json or .csharpierrc.json so every editor and the gate use it`,
+            message: `${key} is a style rule only VS Code reads: move it to .editorconfig (C# width: max_line_length) or the Prettier config so every editor and the gate use it`,
         }));
 }
 

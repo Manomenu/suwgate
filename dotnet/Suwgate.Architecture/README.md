@@ -36,6 +36,20 @@ The target framework, warnings as errors and the lock files stay in `Directory.B
 imports any package, so without them there the lock files are off and NuGet audit only warns about a vulnerable package.
 `architecture/build-settings` checks they are there and that no project turns a default off.
 
+### The rules turned off, and why
+
+| Rule                      | Where         | Why                                                                                                                 |
+| :------------------------ | :------------ | :------------------------------------------------------------------------------------------------------------------ |
+| IDE0055                   | all C#        | formatting is CSharpier's job; two formatters would fight                                                           |
+| IDE0130 (on, as an error) | all C#        | a namespace is its folder path; set on its own so tuning the Style category can never switch it off                 |
+| CA2007                    | all C#        | `ConfigureAwait(false)` matters under a synchronization context; ASP.NET Core and the test runner have none         |
+| IDE0058                   | all C#        | builder APIs (`services.AddX()`) return themselves for chaining; discarding each with `_ =` hides the code          |
+| IDE0045, IDE0046          | all C#        | they rewrite if/else into conditional expressions even when that nests ternaries or buries a throw                  |
+| CA1032                    | all C#        | the standard exception constructor set is for exceptions others rethrow; ours are thrown once, with a message       |
+| CS1591                    | all C#        | documentation files are on so that unused usings are reported, not to demand a `///` comment on every public member |
+| CA1707, CA1515            | test projects | test names are sentences (`The_kit_tells_its_package_version`); xUnit needs public classes                          |
+| CA1054, CA2234            | test projects | tests pass URIs as the strings they read in the request line                                                        |
+
 ## The guards
 
 Each guard is an `IGuard`; a test calls `Guards.Verify(guard)`, which reads that guard's exceptions from the nearest `suwgate.yml`
@@ -86,8 +100,10 @@ exceptions:
 The repository's own file, read by `layers`, `project-references` and `every-project-guarded`. Every project of the solution is
 listed with what it may reference and show its internals to; a production project lists its layers from the top down, the first
 namespace segment under the project's name, with `|` between the parts of one level (they may not use each other). A project
-whose name ends with `.Tests` needs no layers; a test project named otherwise (the gate) gets an exception of
-`architecture/every-project-guarded` with that reason.
+whose name ends with `.Tests` needs no layers, and neither does the gate: a project whose assembly references
+`Suwgate.Architecture` or `Suwgate.Database` is a test project of the guards (a production project takes the package for its
+build only), so `architecture/every-project-guarded` skips it without an exception. A project that builds under another name (`<AssemblyName>` in its
+`.csproj`) is matched by that name when the layers file was read with `LayersFile.Read(repository, path)`.
 
 ```json
 {

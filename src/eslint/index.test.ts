@@ -22,6 +22,10 @@ const SOURCES: Record<string, string> = {
     "src/main.ts":
         'import { notes } from "./notes/notes";\nimport { get } from "./api/client";\n\nexport const start = (): string => notes + get();\n',
     "src/api/client.ts": 'import { notes } from "../notes/notes";\n\nexport const get = (): string => notes;\n',
+    "src/api/plain.ts": 'export const plain = "plain";\n',
+    "src/design/button.ts": 'import { plain } from "../api/plain";\n\nexport const button: string = plain;\n',
+    "src/api/styled.ts": 'import { button } from "../design/button";\n\nexport const styled: string = button;\n',
+    "src/theme/colors.ts": 'import { plain } from "../api/plain";\n\nexport const colors: string = plain;\n',
     "src/notes/notes.ts":
         'import { user } from "../auth/auth";\nimport { label } from "./label";\n\nexport const notes: string = label + user;\n',
     "src/notes/label.ts": 'export const label = "notes";\n',
@@ -44,7 +48,13 @@ beforeAll(async () => {
     const eslint = new ESLint({
         cwd: root,
         overrideConfigFile: true,
-        overrideConfig: app({ root, features: ["notes", "auth"], shared: ["api"], storage: ["src/auth/remembered.ts"] }),
+        overrideConfig: app({
+            root,
+            features: ["notes", "auth"],
+            shared: ["api", "design", "theme"],
+            sharedImports: [["design", "api"]],
+            storage: ["src/auth/remembered.ts"],
+        }),
     });
     for (const result of await eslint.lintFiles(["src"])) {
         const rules = result.messages.map((message) => message.ruleId ?? message.message);
@@ -66,6 +76,12 @@ describe("the app preset", () => {
     it("refuses a feature importing another feature and a shared folder importing a feature", () => {
         expect(violations.get("src/notes/notes.ts")).toEqual(["boundaries/dependencies"]);
         expect(violations.get("src/api/client.ts")).toEqual(["boundaries/dependencies"]);
+    });
+
+    it("lets a shared folder import another only along an edge sharedImports names", () => {
+        expect(violations.get("src/design/button.ts")).toEqual([]);
+        expect(violations.get("src/api/styled.ts")).toEqual(["boundaries/dependencies"]);
+        expect(violations.get("src/theme/colors.ts")).toEqual(["boundaries/dependencies"]);
     });
 
     it("refuses a folder of src/ that is neither a feature nor shared", () => {

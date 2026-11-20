@@ -9,6 +9,7 @@ import { isScanned } from "./scan.ts";
 const RULE = "suwgate/no-comments";
 
 const CODE = /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/;
+export const GENERATED_API_TYPES = "src/api/openapi.d.ts";
 const LINTED_PROFILES: readonly Profile[] = ["web", "library"];
 const USE_THE_PRESET = `extend strict() or app() of @maniumek/suwgate/eslint in eslint.config.js, or switch ${RULE} on as an error for every TypeScript and JavaScript file`;
 
@@ -66,7 +67,8 @@ function findingOf(file: string, verdict: Verdict): Finding[] {
 }
 
 async function findingsIn(context: GuardContext, directory: string): Promise<Finding[]> {
-    const files = context.files.filter((file) => CODE.test(file) && isScanned(file) && inDirectory(file, directory));
+    const generated = context.profiles.includes("web") ? path.posix.join(context.directories.web ?? ".", GENERATED_API_TYPES) : null;
+    const files = context.files.filter((file) => CODE.test(file) && isScanned(file) && inDirectory(file, directory) && file !== generated);
     if (files.length === 0) return [];
     const cwd = path.join(context.root, directory);
     const eslint = await loadEslint(cwd);
@@ -88,7 +90,7 @@ async function findingsIn(context: GuardContext, directory: string): Promise<Fin
 
 export const commentsEslint: Guard = {
     id: "comments-eslint",
-    description: `ESLint lints every TypeScript and JavaScript file and refuses its comments with ${RULE} as an error`,
+    description: `ESLint lints every TypeScript and JavaScript file but the web app's generated API types and refuses its comments with ${RULE} as an error`,
     profiles: LINTED_PROFILES,
     check: async (context) => (await Promise.all(lintedDirectories(context).map((directory) => findingsIn(context, directory)))).flat(),
 };
