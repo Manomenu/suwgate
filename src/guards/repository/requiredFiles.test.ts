@@ -19,7 +19,6 @@ describe("required-files", () => {
         expect(EVERY).toEqual(
             expect.arrayContaining([
                 "suwgate.yml",
-                "criteria.json",
                 ".editorconfig",
                 ".gitignore",
                 "AGENTS.md",
@@ -31,6 +30,9 @@ describe("required-files", () => {
             ]),
         );
         expect(files("dotnet")).toContain("layers.json");
+        expect(EVERY).not.toContain("criteria.json");
+        expect(files("dotnet")).not.toContain("BannedSymbols.txt");
+        expect(files("web")).toContain("knip.config.ts");
         expect(await missing(["database"], [])).toEqual([...EVERY, "compose.yaml"]);
     });
 

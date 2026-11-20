@@ -88,19 +88,28 @@ export function plan(input: PlanInput): PlannedStep[] {
         const cwd = path.join(input.root, (step.profile === undefined ? undefined : input.config.directories[step.profile]) ?? "");
         const base = { id: step.id, title: step.title, after: step.after ?? [], limitSeconds: step.limitSeconds ?? DEFAULT_LIMIT_SECONDS };
         const skippedByConfig = input.config.skip.find((skipped) => skipped.step === step.id);
-        const missing = (step.needs ?? []).filter((tool) => !onPath(tool));
         if (skippedByConfig !== undefined) {
             planned.push({ ...base, skipped: { reason: skippedByConfig.reason, byConfig: true } });
+            continue;
+        }
+        const context: StepContext = {
+            root: input.root,
+            cwd,
+            quick: input.quick,
+            profiles: input.config.profiles,
+            directories: input.config.directories,
+            changed: input.changed,
+        };
+        const line = typeof run === "string" ? run : run(context);
+        const missing = (step.needs ?? []).filter((tool) => !onPath(tool));
+        if (line === null) {
+            planned.push({ ...base, inline: () => Promise.resolve({ passed: true, log: "nothing to check" }) });
+        } else if (typeof line !== "string") {
+            planned.push({ ...base, skipped: { reason: line.skip, byConfig: false } });
         } else if (missing.length > 0) {
             planned.push({ ...base, skipped: { reason: `${missing.join(", ")} not installed`, byConfig: false } });
         } else {
-            const context: StepContext = { root: input.root, cwd, quick: input.quick, changed: input.changed };
-            const line = typeof run === "string" ? run : run(context);
-            planned.push(
-                line === null
-                    ? { ...base, inline: () => Promise.resolve({ passed: true, log: "nothing to check" }) }
-                    : { ...base, command: { line, cwd } },
-            );
+            planned.push({ ...base, command: { line, cwd } });
         }
     }
     return planned;

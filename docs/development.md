@@ -4,7 +4,8 @@
 
 - Node 24 and pnpm 11 (`corepack enable`), `just`.
 - The .NET 10 SDK (`global.json`; tests run on Microsoft.Testing.Platform).
-- For the full gate: `shellcheck` and `gitleaks`. A missing tool is reported as SKIP (a failure in CI), and the report ends with
+- For the full gate: `shellcheck`, `gitleaks`, `python3` and `curl` (the `criteria` step downloads its pinned `vdoc.py` once into
+  `~/.cache/suwagent/`; without network it is SKIP). A missing tool is reported as SKIP (a failure in CI), and the report ends with
   `NOT VERIFIED: <steps>`.
 - A POSIX shell: steps are bash commands. On Windows use Git Bash.
 

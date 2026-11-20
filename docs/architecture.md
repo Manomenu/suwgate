@@ -4,7 +4,7 @@
 
 One line per top-level folder (at most 300 characters each).
 
-- `src/` — the CLI: `cli.ts` (the commands; the one place that wires everything), `gate/` (the gate), `guards/` (repository guards, a folder per package), `profiles/` (steps per profile), `session/` (Claude Code hooks), `dev/` (`suwgate dev`: [dev.md](dev.md)).
+- `src/` — the CLI: `cli.ts` (commands, wires all), `gate/` (the gate), `guards/` (repository guards, a folder per package), `profiles/` (steps per profile; `presets/`: tool configs for apps), `session/` (hooks), `eslint/` (exported ESLint rule, presets), `dev/` (`suwgate dev`: [dev.md](dev.md)).
 - `schema/` — `suwgate.schema.json`, the JSON Schema of `suwgate.yml`; shipped in the npm package, read by the CLI and by VS Code (`yaml.schemas`).
 - `dotnet/` — the .NET guards: `Suwgate.Architecture` (with the contract in `Verification/`), `Suwgate.Database`, and `Suwgate.Tests` (xUnit v3, one folder per package).
 - `docs/` — for people working on suwgate: this map and the contracts, `development.md`, `inventory.md` (what is still to be moved here and by whom), decisions in `adr/`, specs in `visual/spec/` and drafts in `draft/spec/`.
@@ -74,18 +74,18 @@ a setting for more files, a finding per missing file.
 
 A step is a value of type `Step` (`src/gate/contract.ts`) in a profile's list in `src/profiles/`:
 
-| Field          | What it is                                                                                                        |
-| :------------- | :---------------------------------------------------------------------------------------------------------------- |
-| `id`           | kebab-case, unique among all steps; `steps.skip` and `after` name it                                              |
-| `title`        | what the report calls it, with the tool in brackets                                                               |
-| `run`          | a bash command, or a function of the context that returns one (or `null`: nothing to check, so it passes)         |
-| `quick`        | absent: full gate only; `true`: the same `run` in `--quick`; a command or function: what `--quick` runs instead   |
-| `profile`      | the profile it belongs to: it runs in that profile's directory (`directories` in `suwgate.yml`), else in the root |
-| `needs`        | the tools it calls; one missing from `PATH` makes it SKIP with the reason, never PASS                             |
-| `after`        | steps that must finish first (the build before the tests); everything else runs in parallel                       |
-| `limitSeconds` | its ceiling (300 by default)                                                                                      |
+| Field          | What it is                                                                                                                                           |
+| :------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | kebab-case, unique among all steps; `steps.skip` and `after` name it                                                                                 |
+| `title`        | what the report calls it, with the tool in brackets                                                                                                  |
+| `run`          | a bash command, or a function of the context that returns one, `null` (nothing to check: it passes) or `{ skip: reason }` (it cannot run here: SKIP) |
+| `quick`        | absent: full gate only; `true`: the same `run` in `--quick`; a command or function: what `--quick` runs instead                                      |
+| `profile`      | the profile it belongs to: it runs in that profile's directory (`directories` in `suwgate.yml`), else in the root                                    |
+| `needs`        | the tools its command calls; one missing from `PATH` makes it SKIP with the reason, never PASS (a run with nothing to check passes without them)     |
+| `after`        | steps that must finish first (the build before the tests); everything else runs in parallel                                                          |
+| `limitSeconds` | its ceiling (300 by default)                                                                                                                         |
 
-`StepContext` gives `root`, `cwd`, `quick` and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
+`StepContext` gives `root`, `cwd`, `quick`, `profiles`, `directories` (as a guard gets them) and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
 helpers that filter them to a step's directory and quote them). A step's output is kept and shown only when it fails.
 
 ## The contract of a .NET guard

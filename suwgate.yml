@@ -9,13 +9,7 @@ steps:
       title: the built CLI starts (node dist/cli.js --version after pnpm run build)
       run: pnpm run build >/dev/null && node dist/cli.js --version
       after: [publint]
-  skip:
-    - step: attw
-      reason: suwgate ships a command (bin), not an importable module, so attw has no entry point to resolve
 exceptions:
-  - guard: required-files
-    target: criteria.json
-    reason: suwgate has no spec yet, so there are no acceptance criteria to guard; the criteria step comes with the first spec (TODO.md)
   - guard: required-files
     target: layers.json
     reason: the .NET projects of suwgate are guard packages, not a layered server, so there are no layers to describe
@@ -28,8 +22,11 @@ exceptions:
   - guard: docs-paths
     target: docs/ci.md
     reason: the CI guide shows a caller's workflow and git refs (origin/master, ./.github/workflows/... in a consuming repository), which are not paths of suwgate
+  - guard: docs-paths
+    target: README.md
+    reason: the README is the user guide of the package, so it names files of the consuming repositories (contract/openapi.json, knip.config.ts, criteria.json) and preset entry points such as tsconfig/strict
 settings:
   docs-paths:
-    ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/]
+    ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/, architecture/, database/]
   dependency-direction:
     forbidden: ["@maniumek/suwfrontkit", "Suwbackkit.*"]

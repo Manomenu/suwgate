@@ -1,14 +1,17 @@
 import { PROFILES, type Profile, type Step } from "../gate/contract.ts";
+import { contractSteps } from "./contract.ts";
+import { databaseSteps } from "./database.ts";
 import { dotnetSteps } from "./dotnet.ts";
 import { everyRepositorySteps } from "./everyRepository.ts";
 import { librarySteps } from "./library.ts";
 import { nodeSteps } from "./node.ts";
+import { webSteps } from "./web.ts";
 
 const BY_PROFILE: Readonly<Record<Profile, readonly Step[]>> = {
-    web: nodeSteps("web"),
+    web: [...nodeSteps("web"), ...webSteps, ...contractSteps],
     library: [...nodeSteps("library"), ...librarySteps],
-    dotnet: dotnetSteps,
-    database: [],
+    dotnet: [...dotnetSteps, ...contractSteps],
+    database: databaseSteps,
 };
 
 export function stepsFor(profiles: readonly Profile[]): Step[] {

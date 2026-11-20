@@ -112,6 +112,37 @@ describe("suwgate check", () => {
         ]);
     });
 
+    it("passes a step with nothing to check without its tool, skips a step whose run says why, and tells runs the profiles", async () => {
+        const root = repository({ "suwgate.yml": "profiles: [web]\ndirectories:\n  web: app\n", "README.md": "x" });
+        const seen: string[] = [];
+        const contextSteps: readonly Step[] = [
+            { id: "nothing", title: "nothing to check", run: () => null, needs: ["suwgate-no-such-tool"] },
+            { id: "offline", title: "cannot fetch its tool", run: () => ({ skip: "no network" }) },
+            {
+                id: "where",
+                title: "where",
+                profile: "web",
+                run: (context) => {
+                    seen.push(`${context.profiles.join(",")} ${context.directories.web ?? ""} ${path.relative(root, context.cwd)}`);
+                    return null;
+                },
+            },
+        ];
+
+        const result = await check({
+            cwd: root,
+            quick: false,
+            verbose: true,
+            env: { PATH: process.env["PATH"] },
+            catalog: { guards: [], stepsFor: () => contextSteps },
+        });
+
+        expect(result.text).toMatch(/PASS +0s {2}nothing to check/);
+        expect(result.text).toContain("SKIP        cannot fetch its tool — no network");
+        expect(result.text).toContain("NOT VERIFIED: offline");
+        expect(seen).toEqual(["web app app"]);
+    });
+
     it("exits 2 with every problem of an invalid suwgate.yml", async () => {
         const root = repository({ "suwgate.yml": "profiles: [web]\nexceptions:\n  - guard: has-readme\n    target: README.md\n" });
 
