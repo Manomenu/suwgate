@@ -137,11 +137,11 @@
                     "message": {
                         "type": "string",
                         "minLength": 1,
-                        "description": "Narrows the exception to the target's findings whose message contains this text; without it, every finding of the target is excepted. Repository guards only."
+                        "description": "Narrows the exception to the target's findings whose message contains this text; without it, every finding of the target is excepted."
                     },
                     "once": {
                         "type": "boolean",
-                        "description": "A one-time exception: it holds only while master's suwgate.yml does not have it yet (on the branch that adds it). After the merge it excepts nothing and is never stale; the report asks to delete it. Repository guards only."
+                        "description": "A one-time exception: it holds only while master's suwgate.yml does not have it yet (on the branch that adds it). After the merge it excepts nothing and is never stale; the report asks to delete it."
                     }
                 }
             }
@@ -224,7 +224,7 @@
                     "properties": {
                         "project": {
                             "$ref": "#/$defs/relativePath",
-                            "description": "The folder of the server's .csproj (default directories.dotnet)."
+                            "description": "The folder of the server's .csproj (default: the folder of the one .csproj on Sdk=\"Microsoft.NET.Sdk.Web\" in directories.dotnet, or in the repository)."
                         },
                         "logFile": {
                             "$ref": "#/$defs/relativePath",

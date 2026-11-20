@@ -114,7 +114,25 @@ describe("dev logs: where it reads", () => {
 
     it("says how to get a log when there is none", async () => {
         const settings = { ...settingsOf(), root: mkdtempSync(path.join(tmpdir(), "suwgate-logs-")) };
-        await expect(runLogs(parseLogs([]), settings, fakeExec().exec, recordingIo().io, "/")).rejects.toThrow("suwgate dev tmux start");
+        await expect(runLogs(parseLogs([]), settings, fakeExec().exec, recordingIo().io, "/")).rejects.toThrow(
+            "Start the server with `suwgate dev tmux start` (or `suwgate dev server`)",
+        );
+    });
+
+    it("names the repository's own recipes that start the stack and the server, also in a module", async () => {
+        const root = mkdtempSync(path.join(tmpdir(), "suwgate-logs-"));
+        writeFileSync(
+            path.join(root, "justfile"),
+            'suwgate := "App.Web/node_modules/.bin/suwgate"\n\nmod tmux-dev\n\n# The server alone\nserver *args:\n    @{{ suwgate }} dev server {{ args }}\n',
+        );
+        writeFileSync(
+            path.join(root, "tmux-dev.just"),
+            "[private]\ndefault:\n    @just --list tmux-dev\n\n# Open the session\nstart *args:\n    @App.Web/node_modules/.bin/suwgate dev tmux start {{ args }}\n",
+        );
+
+        await expect(runLogs(parseLogs([]), { ...settingsOf(), root }, fakeExec().exec, recordingIo().io, "/")).rejects.toThrow(
+            "Start the server with `just tmux-dev start` (or `just server`)",
+        );
     });
 
     it("reads the compose server's log with --compose", async () => {

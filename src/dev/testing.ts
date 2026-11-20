@@ -2,8 +2,8 @@ import type { Exec, ExecOptions, Io } from "./process.ts";
 import { resolveSettings, type DevSettings } from "./settings.ts";
 
 export function settingsOf(
-    raw: unknown = { name: "myapp" },
-    directories: Record<string, unknown> = { dotnet: "Myapp.Server", web: "Myapp.Web" },
+    raw: unknown = { name: "myapp", server: { project: "Myapp.Server" } },
+    directories: Record<string, unknown> = { web: "Myapp.Web" },
 ): DevSettings {
     return resolveSettings(raw, directories, "/repo");
 }

@@ -47,10 +47,14 @@ Only `name` is required. The schema (`schema/suwgate.schema.json`) lists every k
 | `database.user` / `password` / `name` | `name`                                              | `db psql`, the address, the database names of `checkout-env`                                                                      |
 | `database.up`                         | the compose service                                 | `db up`, the `database-up` and `e2e` steps: a bash command, run in the root, that starts the database and returns once it answers |
 | `database.psql`                       | `docker compose exec`                               | `db psql`, the `e2e` step: a bash command that takes psql's arguments after it                                                    |
-| `server.project`                      | `directories.dotnet`                                | `server`: the folder of the server's `.csproj`                                                                                    |
+| `server.project`                      | the one web-SDK `.csproj` (below)                   | `server`: the folder of the server's `.csproj`                                                                                    |
 | `server.logFile`                      | `.artifacts/logs/server.jsonl`                      | `server` writes it, `logs` reads the newest `*.jsonl` of its folder                                                               |
 | `smoke.checks`                        | `/healthz` (`^ok`), `/api/health` (`"status":"ok"`) | `smoke`: a list of `{path, expect, hint}`; `expect` is a regular expression matched on some line                                  |
 | `directories.web`                     | none                                                | `tmux`: the web app's folder, where `pnpm dev` runs                                                                               |
+
+Without `server.project`, `server` and `tmux` run the one project whose `.csproj` is on `Sdk="Microsoft.NET.Sdk.Web"`, looked for
+in `directories.dotnet` or, without it, in the whole repository (not in `node_modules`, `bin`, `obj` or hidden folders). With none or
+several of them, they stop and name the candidates and `server.project`.
 
 The port offset reproduces what the repositories did by hand: alfusion is `portOffset: 60` (6360, 3360, 5593, 8250), suwagcms 30
 and suwageval -70.

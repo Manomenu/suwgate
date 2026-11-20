@@ -20,8 +20,6 @@
 - A command that re-records the visual snapshots (the `visual` step's Playwright image with `--update-snapshots`).
 - The `consumer-app` step for a library with several consumer apps.
 - The browser-storage ban of `app()` as its own ESLint export, so a repository that is not an app can use it alone.
-- `message` and `once` of an exception for the .NET guards too (`Suwgate.Architecture` matches by target only, so the CLI refuses
-  them on `architecture/*` and `database/*`).
 - `dependency-direction`: a runtime check of the shipped `.csproj` files of a `dotnet` library that honours `PrivateAssets="all"`.
 - Guard candidates:
     - `criterion-per-test`: every test of system logic names a criterion; the meta places (guards, fixtures) as a setting.

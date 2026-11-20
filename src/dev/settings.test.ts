@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { Failure } from "./process.ts";
@@ -15,7 +19,7 @@ function problemsOf(raw: unknown, directories: Record<string, unknown> = {}): st
 
 describe("dev settings", () => {
     it("fills every default from the name alone", () => {
-        const settings = settingsOf();
+        const settings = resolveSettings({ name: "myapp" }, { web: "Myapp.Web" }, "/repo");
         expect(settings.ports).toEqual(BASE_PORTS);
         expect(settings.compose).toEqual({
             file: "compose.yaml",
@@ -27,7 +31,7 @@ describe("dev settings", () => {
         expect(settings.database).toEqual({ user: "myapp", password: "myapp", name: "myapp", up: null, psql: null });
         expect(settings.logFile).toBe(".artifacts/logs/server.jsonl");
         expect(settings.smokeChecks).toEqual(DEFAULT_SMOKE_CHECKS);
-        expect(settings.serverProject).toBe("Myapp.Server");
+        expect(settings.serverProject).toBeNull();
         expect(settings.webDirectory).toBe("Myapp.Web");
     });
 
@@ -71,9 +75,67 @@ describe("dev settings", () => {
         expect(problemsOf(raw)).toContain(message);
     });
 
-    it("says how to fix a missing server project or web folder", () => {
-        const settings = resolveSettings({ name: "x" }, {}, "/repo");
-        expect(() => needServerProject(settings)).toThrow("directories.dotnet");
-        expect(() => needWebDirectory(settings)).toThrow("directories.web");
+    it("says how to fix a missing web folder", () => {
+        expect(() => needWebDirectory(resolveSettings({ name: "x" }, {}, "/repo"))).toThrow("directories.web");
+    });
+});
+
+const WEB = '<Project Sdk="Microsoft.NET.Sdk.Web">\n</Project>\n';
+const LIBRARY = '<Project Sdk="Microsoft.NET.Sdk">\n</Project>\n';
+
+function repository(files: Record<string, string>): string {
+    const root = mkdtempSync(path.join(tmpdir(), "suwgate-server-project-"));
+    for (const [file, text] of Object.entries(files)) {
+        mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+        writeFileSync(path.join(root, file), text);
+    }
+    return root;
+}
+
+function serverProjectOf(files: Record<string, string>, directories: Record<string, unknown> = {}): string {
+    return needServerProject(resolveSettings({ name: "x" }, directories, repository(files)));
+}
+
+describe("dev settings: the server project", () => {
+    it("takes dev.server.project as it is", () => {
+        expect(needServerProject(resolveSettings({ name: "x", server: { project: "Other.Server" } }, {}, "/repo"))).toBe("Other.Server");
+    });
+
+    it("finds the one project on the web SDK when suwgate.yml names none", () => {
+        const files = {
+            "Myapp.Server/Myapp.Server.csproj": WEB,
+            "Myapp.Server.Tests/Myapp.Server.Tests.csproj": LIBRARY,
+            "Myapp.Web/node_modules/pkg/Sample.csproj": WEB,
+            "Myapp.Server/bin/Debug/Copy.csproj": WEB,
+        };
+
+        expect(serverProjectOf(files)).toBe("Myapp.Server");
+    });
+
+    it("finds it below directories.dotnet, also with the SDK as an element", () => {
+        const files = {
+            "src/Api/Api.csproj": '<Project>\n  <Sdk Name="Microsoft.NET.Sdk.Web" />\n</Project>\n',
+            "tools/Other.csproj": WEB,
+        };
+
+        expect(serverProjectOf(files, { dotnet: "src" })).toBe("src/Api");
+    });
+
+    it("names every candidate and the setting when several projects are on the web SDK", () => {
+        const files = { "Chat.Server/Chat.Server.csproj": WEB, "Chat.Tenant/Chat.Tenant.csproj": WEB };
+
+        expect(() => serverProjectOf(files)).toThrow(
+            '2 server projects use Sdk="Microsoft.NET.Sdk.Web" (Chat.Server/Chat.Server.csproj, Chat.Tenant/Chat.Tenant.csproj): set dev.server.project',
+        );
+    });
+
+    it("names the setting when no project is on the web SDK", () => {
+        expect(() => serverProjectOf({ "Lib/Lib.csproj": LIBRARY })).toThrow(
+            'no server project: no .csproj in the repository uses Sdk="Microsoft.NET.Sdk.Web"; set dev.server.project in suwgate.yml',
+        );
+    });
+
+    it("refuses an empty dev.server.project", () => {
+        expect(problemsOf({ name: "x", server: { project: "" } })).toContain("dev.server.project must be a non-empty string");
     });
 });

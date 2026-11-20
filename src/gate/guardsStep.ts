@@ -81,6 +81,11 @@ export async function runGuards(input: GuardsInput): Promise<GuardsSummary> {
             );
         }
     }
+    for (const done of (input.merged ?? []).filter((exception) => !input.guards.some((guard) => guard.id === exception.guard))) {
+        lines.push(
+            `${done.guard}: ${done.target}: the one-time exception is on master now and excepts nothing: delete it from ${CONFIG_FILE}`,
+        );
+    }
     const header = `${input.guards.length} guard${input.guards.length === 1 ? "" : "s"}, ${excepted} findings excepted in ${CONFIG_FILE}`;
     return { passed: !failed, log: [header, ...lines].join("\n") };
 }

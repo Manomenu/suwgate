@@ -14,7 +14,7 @@ const web = async (file: string, text: string) => shown(await findingsOf(testTim
 describe("test-timing", () => {
     it.each([
         "var watch = Stopwatch.StartNew();",
-        "var start = TimeProvider.System.GetTimestamp();",
+        "var start = provider.GetTimestamp();",
         "var elapsed = provider.GetElapsedTime(start);",
         "var ticks = Environment.TickCount64;",
         "var now = DateTime.Now;",
@@ -52,8 +52,46 @@ describe("test-timing", () => {
         'var text = "DateTime.Now and Thread.Sleep(5) are only words here";',
         'var json = """\n        { "at": "DateTime.UtcNow", "wait": "Task.Delay(5)" }\n        """;',
         "var due = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);",
+        "using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };",
+        "client.Timeout = TimeSpan.FromSeconds(30);",
+        "var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));",
+        "var at = new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.FromHours(2));",
+        "var retry = new RetryPolicy(TimeSpan.FromSeconds(1), clock);",
+        "using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), timeProvider);",
+        "CancellationTokenSource cts = new(TimeSpan.FromSeconds(30));",
+        "var window = new TimeSpan(0, 5, 0);",
+        "var cache = new Cache(TimeSpan.Zero);",
     ])("passes a .NET test on a fake clock, a polling loop, a ceiling against a hang or a time only in text: %s", async (body) => {
         expect(await csharp(body)).toEqual([]);
+    });
+
+    it.each([
+        "var now = TimeProvider.System.GetUtcNow();",
+        "var service = new NotesService(store, TimeProvider.System);",
+        "services.AddSingleton(TimeProvider.System);",
+        "await Task.Delay(TimeSpan.FromSeconds(1), TimeProvider.System);",
+    ])("finds a .NET test on the real clock of TimeProvider.System, with the fake one as the fix: %s", async (body) => {
+        const findings = await findingsOf(testTiming, { [TEST]: inTest(body) });
+
+        expect(shown(findings)).toEqual([`${TEST}:6`]);
+        expect(findings[0]?.message).toMatch(/^TimeProvider\.System is the real clock, not a FakeTimeProvider: .*new FakeTimeProvider\(\)/);
+    });
+
+    it.each([
+        ["var retry = new RetryPolicy(TimeSpan.FromMilliseconds(50));", "TimeSpan.FromMilliseconds(50) handed to new RetryPolicy(…)"],
+        [
+            "using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));",
+            "TimeSpan.FromMilliseconds(10) handed to new PeriodicTimer(…)",
+        ],
+        ["var poller = new Poller(store, interval: TimeSpan.FromSeconds(1));", "TimeSpan.FromSeconds(1) handed to new Poller(…)"],
+        ["var poller = new Sync.Poller<Note>(new TimeSpan(0, 0, 1));", "new TimeSpan(0, 0, 1) handed to new Poller(…)"],
+        ["Poller poller = new(TimeSpan.FromSeconds(1));", "TimeSpan.FromSeconds(1) handed to new Poller(…)"],
+    ])("finds a real-time interval handed to a constructor without a TimeProvider: %s", async (body, found) => {
+        const findings = await findingsOf(testTiming, { [TEST]: inTest(body) });
+
+        expect(shown(findings)).toEqual([`${TEST}:6`]);
+        expect(findings[0]?.message.startsWith(`${found} gives the code a real-time interval without a TimeProvider: `)).toBe(true);
+        expect(findings[0]?.message).toContain("a ceiling against a hang stays allowed");
     });
 
     it("reads only the test projects, also a shared .Testing project", async () => {
