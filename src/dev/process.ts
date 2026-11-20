@@ -18,7 +18,7 @@ export interface ExecOptions {
     quiet?: boolean;
 }
 
-export interface ExecResult {
+interface ExecResult {
     status: number;
     stdout: string;
 }

@@ -46,7 +46,7 @@ async function tmux(environment: TmuxEnvironment, args: readonly string[], captu
     return { status: result.status, stdout: result.stdout.trim() };
 }
 
-export async function inTmuxPane(environment: TmuxEnvironment): Promise<boolean> {
+async function inTmuxPane(environment: TmuxEnvironment): Promise<boolean> {
     if ((environment.env["TMUX"] ?? "") === "") return false;
     const panes = await tmux(environment, ["list-panes", "-a", "-F", "#{pane_tty}"], true);
     const here = await environment.exec(["tty"], { capture: true });

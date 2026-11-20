@@ -47,7 +47,7 @@ function repositoryRootOf(cwd: string): string {
     }
 }
 
-export function realEnvironment(): DevEnvironment {
+function realEnvironment(): DevEnvironment {
     return {
         cwd: process.cwd(),
         env: process.env,

@@ -40,7 +40,7 @@ export function composeBase(settings: DevSettings): string[] {
     return ["docker", "compose", "-f", `${settings.root}/${settings.compose.file}`, "--profile", settings.compose.profile];
 }
 
-export function databaseServices(settings: DevSettings): string[] {
+function databaseServices(settings: DevSettings): string[] {
     return [settings.compose.databaseService, ...settings.compose.extraServices];
 }
 

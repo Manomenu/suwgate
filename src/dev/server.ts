@@ -12,7 +12,7 @@ without asking, and when dotnet watch itself exits it is started again after a p
 (Ctrl+C stops it). Its JSON log is also written to dev.server.logFile, which \`suwgate dev logs\` reads.
 Every argument goes to \`dotnet run\`.`;
 
-export const QUICK_FAILURE_SECONDS = 60;
+const QUICK_FAILURE_SECONDS = 60;
 export const MAX_PAUSE_SECONDS = 60;
 const INTERRUPTED = 130;
 
