@@ -3,13 +3,14 @@
 A repository calls these workflows instead of copying a `ci.yml`, so a pinned action, a tool version or a checksum changes in one place.
 They are `workflow_call` workflows in `.github/workflows/` of this repository.
 
-| Workflow            | Does                                                                                                                                                                                                            | Inputs                                                                                                                                                                                            |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, the database (when asked), then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `database`, `database-command`, `oasdiff`, `failure-artifacts` |
-| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                             | `node-version`, `build-command`                                                                                                                                                                   |
-| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                     | `pack-target`                                                                                                                                                                                     |
+| Workflow            | Does                                                                                                                                                                                                            | Inputs                                                                                                                                                                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, the database (when asked), then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `runs-on`, `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `browser-deps-command`, `database`, `database-command`, `oasdiff`, `failure-artifacts` |
+| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                             | `runs-on`, `node-version`, `build-command`                                                                                                                                                                                           |
+| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                     | `runs-on`, `pack-target`                                                                                                                                                                                                             |
 
-Inputs exist only for what differs between repositories. Everything else (runner, timeouts, action pins, tool versions) is fixed here.
+Inputs exist only for what differs between repositories. Everything else (timeouts, action pins, tool versions) is fixed here; the runner
+(`runs-on`, default `ubuntu-24.04`) is an input only for the [self-hosted fallback](#self-hosted-fallback).
 
 ## Full history for the gate
 
@@ -73,7 +74,8 @@ jobs:
         with:
             dotnet: true
             database: true
-            browser-install-command: pnpm exec playwright install --with-deps chromium
+            browser-install-command: pnpm exec playwright install chromium
+            browser-deps-command: pnpm exec playwright install-deps chromium
 ```
 
 An npm package (suwfrontkit): the gate, then on `master` the release and the publish job in the caller.
@@ -175,6 +177,38 @@ jobs:
 The pins used here: checkout v7.0.1, pnpm/action-setup v6.1.1, setup-node v7.1.0, setup-dotnet v6.0.0, upload-artifact v7.0.2,
 changesets/action v2.1.2 (as in `gate.yml` and `release-npm.yml`), download-artifact v8.0.2 (`9000827ccba6bdab643e8b6fd33ac0654aef8333`),
 NuGet/login v1.2.0 (`8d196754b4036150537f80ac539e15c2f1028841`).
+
+## Self-hosted fallback
+
+A private repository of a GitHub Free account gets 2,000 Linux minutes a month (12 USD at 0.006 USD a minute); once they are
+used up, GitHub refuses its jobs until the month ends. The fallback moves those jobs onto self-hosted runners on the owner's
+machine meanwhile. Every input `runs-on` of the three workflows (default `ubuntu-24.04`) sets the runner of all their jobs, and a
+caller passes the repository variable through, in its own jobs as well:
+
+```yaml
+jobs:
+    gate:
+        uses: Manomenu/suwgate/.github/workflows/gate.yml@<sha>
+        with:
+            runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
+    build:
+        runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}
+```
+
+GitHub's contexts reference lists `vars` among the contexts of both `jobs.<job_id>.runs-on` and `jobs.<job_id>.with.<input_id>`.
+With no variable `CI_RUNNER` nothing changes. The switch that sets and deletes it from the account's billing usage, the systemd
+units and the setup of the runners are in [ci/self-hosted](../ci/self-hosted/README.md).
+
+So that `gate.yml` runs on a self-hosted Linux runner that is not Ubuntu and has no sudo:
+
+- gitleaks, shellcheck and oasdiff go into `bin/` of the runner's temp folder, which the step adds to the `PATH` of the job, not
+  into `/usr/local/bin` with sudo;
+- the browser's system packages are a command of their own, `browser-deps-command`, e.g.
+  `pnpm exec playwright install-deps chromium`, run only where `runner.environment` is `github-hosted`: `playwright install --with-deps`
+  installs them with apt, which a Fedora runner has not, and a self-hosted runner brings its own. `browser-install-command` then installs the browser alone
+  (`pnpm exec playwright install chromium`), into the runner's home;
+- pnpm, Node and .NET come from their setup actions as on GitHub; a self-hosted runner sets `DOTNET_INSTALL_DIR` to a folder it
+  may write (setup-dotnet's README: the default `/usr/share/dotnet` "may not be writable by the runner user").
 
 ## NuGet versions and tags
 

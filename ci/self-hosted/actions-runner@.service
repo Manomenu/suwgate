@@ -1,0 +1,22 @@
+[Unit]
+Description=GitHub Actions self-hosted runner of the repository %i
+Documentation=https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/configure-the-application
+Wants=podman.socket
+After=podman.socket
+
+[Service]
+WorkingDirectory=%h/.local/share/actions-runner/%i
+ExecStart=%h/.local/share/actions-runner/%i/run.sh
+Environment=HOME=%h/.local/share/actions-runner/%i/home
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=DOTNET_INSTALL_DIR=%h/.local/share/actions-runner/%i/home/.dotnet
+Environment=DOCKER_HOST=unix://%t/podman/podman.sock
+Environment=CONTAINER_HOST=unix://%t/podman/podman.sock
+KillMode=process
+KillSignal=SIGTERM
+TimeoutStopSec=5min
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target

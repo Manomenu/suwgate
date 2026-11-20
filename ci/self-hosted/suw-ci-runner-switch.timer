@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the account's Actions minutes every 15 minutes
+Documentation=https://github.com/Manomenu/suwgate/blob/master/ci/self-hosted/README.md
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

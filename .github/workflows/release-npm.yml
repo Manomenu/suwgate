@@ -3,6 +3,10 @@ name: release-npm
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: The runner label of every job, e.g. a self-hosted runner's label while the account's Actions minutes are used up
+        type: string
+        default: ubuntu-24.04
       node-version:
         type: string
         default: 24.22.1
@@ -19,7 +23,7 @@ permissions: {}
 
 jobs:
   select-mode:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 10
     outputs:
       mode: ${{ steps.select-mode.outputs.mode }}
@@ -46,7 +50,7 @@ jobs:
   version:
     if: needs.select-mode.outputs.mode == 'version'
     needs: select-mode
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 10
     permissions:
       contents: write
@@ -70,7 +74,7 @@ jobs:
   pack:
     if: needs.select-mode.outputs.mode == 'publish'
     needs: select-mode
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 10
     outputs:
       pack-dir-artifact-id: ${{ steps.pack.outputs.pack-dir-artifact-id }}

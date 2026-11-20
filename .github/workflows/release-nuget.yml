@@ -3,6 +3,10 @@ name: release-nuget
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: The runner label of every job, e.g. a self-hosted runner's label while the account's Actions minutes are used up
+        type: string
+        default: ubuntu-24.04
       pack-target:
         description: Solution or project to pack, empty for the one in the repository root
         type: string
@@ -15,7 +19,7 @@ permissions: {}
 
 jobs:
   pack:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 15
     permissions:
       contents: read
