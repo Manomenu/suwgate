@@ -6,28 +6,30 @@ namespace Suwgate.Architecture.Sources;
 
 internal static class DependencyModel
 {
-    public static IReadOnlyList<IType> TypesOf(IReadOnlyCollection<Assembly> assemblies)
+    public static IReadOnlyList<IType> TypesOf(IReadOnlyCollection<Assembly> assemblies) =>
+        TypesOf(assemblies, [.. assemblies.Select(assembly => assembly.GetName().Name ?? "")]);
+
+    public static IReadOnlyList<IType> TypesOf(IReadOnlyCollection<Assembly> assemblies, IReadOnlyCollection<string> roots)
     {
         var model = new ArchLoader().LoadAssemblies([.. assemblies]).Build();
-        var roots = assemblies.Select(assembly => assembly.GetName().Name ?? "").ToList();
         return
         [
             .. model.Types.Where(type =>
-                !type.Name.Contains('<', StringComparison.Ordinal) && roots.Exists(root => RootOf(type, root) is not null)
+                !type.Name.Contains('<', StringComparison.Ordinal) && roots.Any(root => RelativeNamespace(type, root) is not null)
             ),
         ];
     }
 
-    public static string? RootOf(IType type, string root)
-    {
-        var name = type.Namespace.FullName;
-        return name == root || name.StartsWith(root + ".", StringComparison.Ordinal) ? root : null;
-    }
+    public static bool In(IType type, Assembly assembly) => type.Assembly.FullName == assembly.FullName;
 
-    public static string? PartOf(IType type, string root)
+    public static string? RelativeNamespace(IType type, string root)
     {
         var name = type.Namespace.FullName;
-        return name.StartsWith(root + ".", StringComparison.Ordinal) ? name[(root.Length + 1)..].Split('.')[0] : null;
+        if (name == root)
+        {
+            return "";
+        }
+        return name.StartsWith(root + ".", StringComparison.Ordinal) ? name[(root.Length + 1)..] : null;
     }
 
     public static IEnumerable<IType> Users(IType type) =>

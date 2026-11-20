@@ -95,6 +95,47 @@ public sealed class SuwgateGuardsTests : IDisposable
         Assert.DoesNotContain("database/migration-script-names", RecordedIds());
     }
 
+    [Theory]
+    [InlineData("true", "architecture/no-escape-hatches\tpassed")]
+    [InlineData("false", "architecture/no-escape-hatches\tfailed")]
+    public void The_setting_for_the_null_forgiving_operator_in_tests_reaches_its_guard(string value, string evidence)
+    {
+        using var repository = new WiredRepository(
+            new Dictionary<string, string>
+            {
+                ["Wired.Tests/NotesTests.cs"] = "class NotesTests { string? Name; int Length => Name!.Length; }",
+            }
+        );
+
+        repository.Verify(NullForgiving(value), Inputs);
+
+        Assert.Contains(evidence, repository.Recorded());
+    }
+
+    [Fact]
+    public void A_setting_for_the_null_forgiving_operator_that_is_not_true_or_false_fails_with_the_fix()
+    {
+        var failure = wired.Verify(NullForgiving("sometimes"), Inputs);
+
+        Assert.Contains(
+            "architecture/no-escape-hatches: suwgate.yml: settings.architecture/no-escape-hatches.nullForgivingInTests is \"sometimes\": set it to true or false",
+            failure?.Message ?? "",
+            StringComparison.Ordinal
+        );
+    }
+
+    private static SuwgateSettings NullForgiving(string value) =>
+        WiredRepository.Settings(
+            ["dotnet"],
+            settings: new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
+            {
+                ["architecture/no-escape-hatches"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["nullForgivingInTests"] = value,
+                },
+            }
+        );
+
     [Fact]
     public void Without_an_evidence_directory_nothing_is_written()
     {

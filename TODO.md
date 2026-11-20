@@ -21,8 +21,6 @@
 - The `consumer-app` step for a library with several consumer apps.
 - The browser-storage ban of `app()` as its own ESLint export, so a repository that is not an app can use it alone.
 - An override of the reporter of `e2eTests()` (the Playwright preset).
-- `Suwgate.Architecture` `architecture/layers`: guard the order of features inside a product area (nested namespaces), not only the
-  top-level layers.
 - `dependency-direction`: a runtime check of the shipped `.csproj` files of a `dotnet` library that honours `PrivateAssets="all"`.
 - Guard candidates:
     - `criterion-per-test`: every test of system logic names a criterion; the meta places (guards, fixtures) as a setting.

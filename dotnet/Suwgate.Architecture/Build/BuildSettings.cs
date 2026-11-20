@@ -50,10 +50,12 @@ public sealed class BuildSettings(RepositoryFiles repository) : IGuard
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToList();
-        return [.. RootFindings(), .. files.SelectMany(file => PropertyFindings(file, XDocument.Parse(repository.Read(file))))];
+        var documents = files.ToDictionary(file => file, file => XDocument.Parse(repository.Read(file)), StringComparer.Ordinal);
+        var builds = new NormalBuilds(documents.Values);
+        return [.. RootFindings(builds), .. documents.SelectMany(document => PropertyFindings(document.Key, document.Value, builds))];
     }
 
-    private IEnumerable<Finding> RootFindings()
+    private IEnumerable<Finding> RootFindings(NormalBuilds builds)
     {
         if (!repository.Paths.Contains(RootProps))
         {
@@ -64,7 +66,7 @@ public sealed class BuildSettings(RepositoryFiles repository) : IGuard
             yield break;
         }
         var props = XDocument.Parse(repository.Read(RootProps));
-        foreach (var (property, fix) in RestoreSettings.Where(setting => !Sets(props, setting.Key)))
+        foreach (var (property, fix) in RestoreSettings.Where(setting => !Sets(props, setting.Key, builds)))
         {
             yield return new Finding(
                 $"{RootProps}: {property}",
@@ -80,17 +82,28 @@ public sealed class BuildSettings(RepositoryFiles repository) : IGuard
         }
     }
 
-    private static bool Sets(XDocument props, string property) =>
-        props.Descendants().Any(element => element.Name.LocalName == property && element.Value.Trim() == "true");
+    private static bool Sets(XDocument props, string property, NormalBuilds builds) =>
+        props
+            .Descendants()
+            .Any(element =>
+                element.Name.LocalName == property && element.Value.Trim() == "true" && builds.Applies(element) == Applies.Always
+            );
 
-    private static IEnumerable<Finding> PropertyFindings(string file, XDocument document) =>
+    private static IEnumerable<Finding> PropertyFindings(string file, XDocument document, NormalBuilds builds) =>
         document
             .Descendants()
             .Where(element => element.Parent?.Name.LocalName == "PropertyGroup")
-            .Select(element => (name: element.Name.LocalName, value: element.Value.Trim()))
-            .Select(property => (property.name, fix: FixOf(property.name, property.value)))
+            .Select(element => (element, fix: FixOf(element.Name.LocalName, element.Value.Trim())))
             .Where(property => property.fix is not null)
-            .Select(property => new Finding($"{file}: {property.name}", property.fix ?? ""));
+            .Select(property => (property.element, property.fix, applies: builds.Applies(property.element)))
+            .Where(property => property.applies != Applies.Never)
+            .Select(property => new Finding(
+                $"{file}: {property.element.Name.LocalName}",
+                property.applies == Applies.Unknown
+                    ? $"{property.fix}; its condition is one suwgate cannot evaluate, so it may hold in a normal build: "
+                        + "write it as '$(Property)' == 'value' over a property only an explicit build sets, or add an exception with the reason"
+                    : property.fix ?? ""
+            ));
 
     private static string? FixOf(string name, string value)
     {
