@@ -1,5 +1,20 @@
 # @maniumek/suwgate
 
+## 0.5.1
+
+### Patch Changes
+
+- 841e793: `suwgate step dotnet-test -- --filter-class "*Notes*"` no longer fails in a repository with more than one test project: with
+  arguments, a test project the filter misses no longer fails the step (`--ignore-exit-code 8` for each test project), and the step
+  still fails when no test of the whole run ran, by xUnit's reports. Without arguments the step stays strict for each test project.
+- 74e583b: `dotnet-test` no longer loses an xUnit report at random in a repository with more than one test project. xUnit named each report
+  after the moment its test project started, so two projects that `dotnet test` started together could write the same file, one
+  overwriting the other, and `criteria-ran` and the count of tests run then took passing tests for tests that never ran. Each test
+  project now writes its own report, `<project>.<target framework>.xunit.xml`: the step passes `--report-xunit-xml-filename` to each
+  project through `TestingPlatformCommandLineArguments`, set by a targets file it hands to `dotnet test` as
+  `-p:CustomAfterMicrosoftCommonTargets`, so a repository that sets `CustomAfterMicrosoftCommonTargets` itself loses its value in
+  this step.
+
 ## 0.5.0
 
 ### Minor Changes
