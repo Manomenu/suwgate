@@ -11,7 +11,7 @@ One line per top-level folder (at most 300 characters each).
 - `.changeset/` — changesets of the CLI: one Markdown file per change waiting for the next release, and the config (base branch `master`, only `src/` and `schema/` need one).
 - `.github/` — `workflows/ci.yml`: the gate on every push and pull request (suwgate checks itself from the sources), then on `master` the release of the CLI with changesets and npm trusted publishing.
 - `.claude/` — the committed Claude Code settings: the Stop hook runs the quick gate, the PreToolUse hook refuses an agent's edit of the gate and of generated files; both are `suwgate hook` commands run from the sources.
-- `.githooks/` — `pre-commit`: gitleaks on what is staged, then `suwgate check --quick` from the sources; `just sync` enables it.
+- `.githooks/` — `pre-commit`: `suwgate hook pre-commit` from the sources (gitleaks on what is staged, then the quick gate); `just sync` enables it.
 - `.config/` — `dotnet-tools.json`: CSharpier at a pinned version, for the `dotnet-format` step.
 - `.vscode/` — the editor's glue: recommended extensions, formatter per language, `yaml.schemas` for `suwgate.yml`, tasks that run the gate. No style rules.
 
