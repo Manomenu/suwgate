@@ -90,3 +90,27 @@ export function hasDevSection(context: StepContext): boolean {
 }
 
 export const CHECKOUT_ENV = [`variables="$(${suwgate("dev checkout-env")})"`, 'eval "$variables"'];
+
+export function runDirectory(step: string): string {
+    return `run="\${SUWGATE_RUN:-$(mktemp -d)}/${step}" && mkdir -p "$run"`;
+}
+
+export function verdictCommand(args: string): string {
+    return suwgate(`verdict ${args}`);
+}
+
+export function countedVitest(step: string, command: string): string {
+    return [
+        runDirectory(step),
+        `${command} --reporter=default --reporter=json --outputFile.json="$run/vitest.json"`,
+        verdictCommand(`tests vitest "$run/vitest.json" ${quoted(`vitest (${step})`)}`),
+    ].join(" && ");
+}
+
+export function countedPlaywright(step: string, command: string): string[] {
+    return [
+        runDirectory(step),
+        `PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" ${command} --reporter=list,json`,
+        verdictCommand(`tests playwright "$run/playwright.json" ${quoted(`playwright (${step})`)}`),
+    ];
+}

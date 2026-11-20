@@ -38,6 +38,9 @@ exceptions:
   across the board overrides it with `SUWGATE_QUICK_LIMIT=<seconds>`.
 - `exceptions` let one target through one guard, always with a `reason`; `suwgate check` counts them in its report, and an
   exception that no longer matches anything fails the gate until it is deleted.
+- `guards.skip` turns one whole guard off, always with a `reason`: a repository guard, or a .NET guard (`architecture/*`,
+  `database/*`), which `SuwgateGuards.VerifyAll` then does not run and the `dotnet-test` step does not ask evidence for. A
+  library, for example: `guards: { skip: [{ guard: architecture/endpoints, reason: a library has no server }] }`.
 - The schema is in the package, `schema/suwgate.schema.json`. VS Code checks the file as you type with
   `"yaml.schemas": { "./node_modules/@maniumek/suwgate/schema/suwgate.schema.json": "suwgate.yml" }` in `.vscode/settings.json`.
 - `settings` configure a guard by its id, for example `dependency-direction: { applications: [Myapp.*] }`,
@@ -89,10 +92,10 @@ Each step looks where its profile lives (`directories`) and passes with nothing 
 
 | Profile          | Steps                                                                                                                                                                                                                                                                                                                                                                                                    |
 | :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `web`, `library` | `pnpm-install` (only without `node_modules`), `typecheck` (every `tsconfig*.json` but `tsconfig.build.json`), `lint`, `unit-tests` (the Vitest project `unit` when the config names one), `format`, `knip`                                                                                                                                                                                               |
+| `web`, `library` | `pnpm-install` (only without `node_modules`), `typecheck` (every `tsconfig*.json` but `tsconfig.build.json`, with `tsc --showConfig`), `lint` (with `eslint --print-config`), `unit-tests` (the Vitest project `unit` when the config names one; 0 tests fail), `format`, `knip`                                                                                                                         |
 | `web`            | `e2e`: `playwright test -c e2e/playwright.config.ts`, after the build, the database and the .NET tests; with a `dev` section, first the checkout's variables (`suwgate dev checkout-env`) and a fresh, empty `E2E_DATABASE` (`dev db up`, then drop and create it); Playwright's `webServer` starts and stops the server and the web app                                                                 |
 | `library`        | `stories` (with `.storybook/`), `publint`, `attw`, `consumer-app` (packs the library into a copy of `gate/consumer/app`, builds it, runs `gate/consumer/playwright.config.ts`), `visual` (`visual/playwright.config.ts` in the Playwright image of the installed `@playwright/test`), `changeset`                                                                                                        |
-| `dotnet`         | `dotnet-build`, `dotnet-format`, `dotnet-test` (with a `dev` section, under the checkout's variables, so two worktrees never share a test database; `--quick`: only the test projects that use `Suwgate.Architecture` or `Suwgate.Database`); every .NET step leaves no idle MSBuild worker or build server behind                                                                                       |
+| `dotnet`         | `dotnet-build`, `dotnet-format`, `dotnet-test` (fails on 0 tests and unless every .NET guard of the profiles ran; with a `dev` section, under the checkout's variables, so two worktrees never share a test database; `--quick`: only the test projects that use `Suwgate.Architecture` or `Suwgate.Database`); every .NET step leaves no idle MSBuild worker or build server behind                     |
 | `dotnet`, `web`  | with `contract/openapi.json`: `api-contract` (the contract and `src/api/openapi.d.ts` of the web app regenerated from the server's project, the one that references `Microsoft.Extensions.ApiDescription.Server`), `api-version` (oasdiff against master; a break needs a new major version in `contract/package.json`), `contract-pins` (every test tagged `contract <name>@<version>` names a version) |
 | `database`       | `database-up`: `docker compose --profile db up -d --wait db`, not in CI                                                                                                                                                                                                                                                                                                                                  |
 | every repository | `compose` (with a compose file), `criteria`, `shellcheck`, `gitleaks`                                                                                                                                                                                                                                                                                                                                    |
@@ -154,15 +157,40 @@ The configs of the tools the steps run extend suwgate's, so an application keeps
 
 ### The .NET guards
 
-In the xUnit tests of a .NET application:
+One xUnit test in the gate's test project runs every guard of the `dotnet` and `database` profiles:
 
 ```csharp
-[Fact]
-public void Every_interface_has_two_implementations() =>
-    Guards.Verify(InterfacesHaveTwoImplementations.Of(typeof(ServerApp).Assembly));
+public sealed class GuardTests
+{
+    [Fact]
+    public void Every_guard_of_suwgate_passes() =>
+        SuwgateGuards.VerifyAll(
+            new GuardInputs { Production = [typeof(ServerApp).Assembly], Tests = [typeof(GuardTests).Assembly], Server = typeof(ServerApp) },
+            new DatabaseProfile()
+        );
+}
 ```
 
-`Guards.Verify` reads the exceptions of that guard from the nearest `suwgate.yml` above the test's output folder.
+`VerifyAll` reads the nearest `suwgate.yml` above the test's output folder (profiles, `guards.skip`, exceptions, settings), finds
+the solution, `layers.json`, the sources and the migrations itself, and takes from the test only what it cannot find
+([dotnet/Suwgate.Architecture/README.md](dotnet/Suwgate.Architecture/README.md) lists the inputs).
+
+### What the gate proves ran
+
+A check counts only when the tool shows it ran, not because a file or a line of text is there:
+
+- The .NET guards: `dotnet-test` points `SUWGATE_EVIDENCE` at a fresh folder of this gate run, and every guard that runs (through
+  `VerifyAll` or `Guards.Verify`) writes its id and outcome there. The step fails unless every guard of the profiles that
+  `guards.skip` does not name is in it, so a deleted guard test, a `[Fact(Skip = …)]` or a filtered-out one fails the gate.
+- Zero tests fail: `unit-tests`, `stories` (Vitest, its JSON report), `e2e` (Playwright, its JSON report) and `dotnet-test`
+  (`--zero-tests-policy strict` of Microsoft.Testing.Platform, and xUnit's XML report) fail when the tool ran no test, also when
+  every test was skipped. A repository with truly no tests for a profile skips the step in `suwgate.yml` with a reason.
+- `typecheck` reads `tsc --showConfig` of every tsconfig it checks: the strict options of the suwgate preset must be in effect, so
+  an override that turns one off fails, naming the option.
+- `lint` reads `eslint --print-config` of a source file of `src/`: `suwgate/no-comments` and `boundaries/dependencies` must be
+  errors there.
+- The reports live in a temporary folder of the run (`SUWGATE_RUN`), deleted when `suwgate check` ends. `dotnet-test` asks xUnit
+  for its XML report (`--report-xunit-xml`), so every .NET test project tests with xUnit v3.
 
 `suwgate dev db|logs|smoke|server|tmux|checkout-env` runs the local stack of the template (database, logs, smoke test, server, tmux
 session, worktree databases) from a `dev` section of `suwgate.yml`: [docs/dev.md](docs/dev.md).

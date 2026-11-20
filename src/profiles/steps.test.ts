@@ -37,6 +37,7 @@ interface Where {
     profiles?: Profile[];
     directories?: Partial<Record<Profile, string>>;
     changed?: string[];
+    skippedGuards?: string[];
 }
 
 function context(root: string, where: Where = {}): StepContext {
@@ -48,6 +49,8 @@ function context(root: string, where: Where = {}): StepContext {
         quick: false,
         profiles: where.profiles ?? (where.profile === undefined ? [] : [where.profile]),
         directories,
+        skippedSteps: [],
+        skippedGuards: where.skippedGuards ?? [],
         changed: () => where.changed ?? [],
     };
 }
@@ -133,9 +136,16 @@ describe("typecheck", () => {
             "tsconfig.app.json": "{}",
         });
 
-        expect(typecheck(context(root))).toBe(
-            "pnpm exec tsc --noEmit -p tsconfig.json && pnpm exec tsc --noEmit -p tsconfig.app.json && pnpm exec tsc --noEmit -p tsconfig.node.json",
-        );
+        const checks = typecheck(context(root))
+            .split(" && ")
+            .filter((part) => part.startsWith("pnpm exec tsc --noEmit"));
+        expect(checks).toEqual([
+            "pnpm exec tsc --noEmit -p tsconfig.json",
+            "pnpm exec tsc --noEmit -p tsconfig.app.json",
+            "pnpm exec tsc --noEmit -p tsconfig.node.json",
+        ]);
+        expect(typecheck(context(root))).toContain("pnpm exec tsc --showConfig -p tsconfig.node.json | ");
+        expect(typecheck(context(root))).toContain("verdict tsconfig 'tsconfig.node.json'");
     });
 
     it("runs in --quick only when code of its directory changed", () => {
@@ -144,21 +154,23 @@ describe("typecheck", () => {
         const directories = { web: "Myapp.Web" };
 
         expect(line(quick, context(root, { profile: "web", directories, changed: ["Myapp.Web/README.md", "src/a.ts"] }))).toBeNull();
-        expect(line(quick, context(root, { profile: "web", directories, changed: ["Myapp.Web/src/a.tsx"] }))).toBe(
-            "pnpm exec tsc --noEmit -p tsconfig.json",
+        expect(line(quick, context(root, { profile: "web", directories, changed: ["Myapp.Web/src/a.tsx"] }))).toMatch(
+            /^pnpm exec tsc --noEmit -p tsconfig\.json && pnpm exec tsc --showConfig -p tsconfig\.json \| .* verdict tsconfig 'tsconfig\.json'$/,
         );
     });
 });
 
 describe("unit-tests", () => {
     it("runs the project named unit when the Vitest config has it, otherwise every test", () => {
-        expect(unitTests(context(repository({ "vite.config.ts": "export default {};" })))).toBe("pnpm exec vitest run");
+        expect(unitTests(context(repository({ "vite.config.ts": "export default {};" })))).toContain(
+            "&& pnpm exec vitest run --reporter=default",
+        );
         expect(
             unitTests(context(repository({ "vitest.config.ts": 'projects: [{ test: { name: "unit" } }, { test: { name: "stories" } }]' }))),
-        ).toBe("pnpm exec vitest run --project unit");
+        ).toContain("&& pnpm exec vitest run --project unit --reporter=default");
         expect(
             unitTests(context(repository({ "vitest.config.ts": 'projects: [unitTests({ environment: "jsdom" }), storyTests(options)]' }))),
-        ).toBe("pnpm exec vitest run --project unit");
+        ).toContain("&& pnpm exec vitest run --project unit --reporter=default");
     });
 });
 
@@ -181,7 +193,7 @@ describe("stories and visual", () => {
         expect(visual(context(root))).toContain(
             "mcr.microsoft.com/playwright:v1.65.1-noble node_modules/.bin/playwright test -c visual/playwright.config.ts",
         );
-        expect(line(step("stories").run, context(root))).toBe("pnpm exec vitest run --project stories");
+        expect(line(step("stories").run, context(root))).toContain("&& pnpm exec vitest run --project stories --reporter=default");
     });
 });
 
@@ -214,6 +226,8 @@ describe("attw and consumer-app", () => {
     });
 });
 
+const TEST_OPTIONS = '--no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
+
 describe("dotnet-test --quick", () => {
     const files = {
         "Myapp.Server/Myapp.Server.csproj": "<Project />",
@@ -225,7 +239,7 @@ describe("dotnet-test --quick", () => {
 
         expect(guardTests(context(root, { changed: ["README.md"] }))).toBeNull();
         expect(guardTests(context(root, { changed: ["Myapp.Server/Program.cs"] }))).toBe(
-            "dotnet test --project 'Myapp.Gate/Myapp.Gate.csproj' --no-build --no-progress",
+            `dotnet test --project 'Myapp.Gate/Myapp.Gate.csproj' ${TEST_OPTIONS}`,
         );
         expect(guardTests(context(repository({ "A/A.csproj": "<Project />" }), { changed: ["A/B.cs"] }))).toBeNull();
         const packages = repository({
@@ -236,7 +250,7 @@ describe("dotnet-test --quick", () => {
                 '<PackageReference Include="xunit.v3" /><ProjectReference Include="..\\Suwgate.Architecture\\Suwgate.Architecture.csproj" />',
         });
         expect(guardTests(context(packages, { changed: ["dotnet/Suwgate.Architecture/A.cs"] }))).toBe(
-            "dotnet test --project 'dotnet/Suwgate.Tests/Suwgate.Tests.csproj' --no-build --no-progress",
+            `dotnet test --project 'dotnet/Suwgate.Tests/Suwgate.Tests.csproj' ${TEST_OPTIONS}`,
         );
     });
 
@@ -246,7 +260,7 @@ describe("dotnet-test --quick", () => {
         });
 
         expect(guardTests(context(root, { changed: ["Myapp.Gate/A.cs"] }))).toBe(
-            "dotnet test --project 'Myapp.Gate/Myapp.Gate.csproj' --no-build --no-progress",
+            `dotnet test --project 'Myapp.Gate/Myapp.Gate.csproj' ${TEST_OPTIONS}`,
         );
     });
 });
@@ -288,13 +302,17 @@ describe("database-up and compose", () => {
     });
 });
 
+const PASSED_PLAYWRIGHT = JSON.stringify({
+    suites: [{ title: "a.e2e.ts", file: "a.e2e.ts", specs: [{ title: "works", tests: [{ status: "expected" }] }] }],
+});
+
 describe("e2e", () => {
     it("runs the web app's Playwright tests when it has e2e/playwright.config.ts", () => {
         const root = repository({ "Myapp.Web/e2e/playwright.config.ts": "" });
         const directories = { web: "Myapp.Web" };
 
-        expect(line(step("e2e").run, context(root, { profile: "web", directories }))).toBe(
-            "pnpm exec playwright test -c e2e/playwright.config.ts",
+        expect(line(step("e2e").run, context(root, { profile: "web", directories }))).toContain(
+            'PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" pnpm exec playwright test -c e2e/playwright.config.ts --reporter=list,json\n',
         );
         expect(line(step("e2e").run, context(repository({}), { profile: "web" }))).toBeNull();
     });
@@ -305,7 +323,7 @@ describe("e2e", () => {
             "compose.yaml": "services: {}\n",
             "Myapp.Web/e2e/playwright.config.ts": "",
             "bin/docker": '#!/usr/bin/env bash\necho "docker $*" >>"$CALLS"\n',
-            "bin/pnpm": '#!/usr/bin/env bash\necho "pnpm $* $E2E_DATABASE $E2E_SERVER_PORT" >>"$CALLS"\n',
+            "bin/pnpm": `#!/usr/bin/env bash\necho "pnpm $* $E2E_DATABASE $E2E_SERVER_PORT" >>"$CALLS"\n[ -z "\${PLAYWRIGHT_JSON_OUTPUT_FILE:-}" ] || echo '${PASSED_PLAYWRIGHT}' >"$PLAYWRIGHT_JSON_OUTPUT_FILE"\n`,
         });
         execFileSync("chmod", ["+x", "bin/docker", "bin/pnpm"], { cwd: root });
         const at = context(root, { profile: "web", directories: { web: "Myapp.Web" } });
@@ -321,7 +339,7 @@ describe("e2e", () => {
         expect(log[1]).toMatch(
             /exec -T db psql .* -d postgres -c DROP DATABASE IF EXISTS myapp_e2e WITH \(FORCE\) -c CREATE DATABASE myapp_e2e$/,
         );
-        expect(log[2]).toMatch(/^pnpm exec playwright test -c e2e\/playwright.config.ts myapp_e2e \d+$/);
+        expect(log[2]).toMatch(/^pnpm exec playwright test -c e2e\/playwright.config.ts --reporter=list,json myapp_e2e \d+$/);
         expect(existsSync(path.join(root, ".artifacts/logs"))).toBe(true);
     });
 

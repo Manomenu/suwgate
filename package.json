@@ -47,7 +47,7 @@
     },
     "packageManager": "pnpm@11.24.0",
     "scripts": {
-        "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -r src/profiles/presets/tsconfig dist/profiles/presets/",
+        "build": "tsc -p tsconfig.build.json && mkdir -p dist/profiles/presets/tsconfig && cp -r src/profiles/presets/tsconfig/. dist/profiles/presets/tsconfig/",
         "changeset": "changeset",
         "release": "pnpm run build && changeset publish",
         "prepack": "pnpm run build"

@@ -76,6 +76,25 @@
                 }
             }
         },
+        "guards": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "skip": {
+                    "description": "Whole guards that do not apply to this repository, each with its reason: repository guards, and the .NET guards (architecture/*, database/*) that SuwgateGuards.VerifyAll runs and the dotnet-test step asks evidence for.",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["guard", "reason"],
+                        "properties": {
+                            "guard": { "type": "string", "pattern": "^([a-z]+/)?[a-z][a-z0-9-]*$" },
+                            "reason": { "$ref": "#/$defs/reason" }
+                        }
+                    }
+                }
+            }
+        },
         "exceptions": {
             "description": "Exceptions from the guards: one target of one guard, each with its reason. suwgate check counts them.",
             "type": "array",
@@ -196,7 +215,7 @@
         "settings": {
             "description": "Settings of a guard, by its id; the guard's own schema checks them.",
             "type": "object",
-            "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" }
+            "propertyNames": { "pattern": "^([a-z]+/)?[a-z][a-z0-9-]*$" }
         }
     },
     "$defs": {

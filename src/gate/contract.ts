@@ -24,6 +24,12 @@ export interface GuardContext {
     read(file: string): string;
 }
 
+export interface DotnetGuard {
+    id: string;
+    profile: Profile;
+    settingsSchema?: object;
+}
+
 export interface Guard {
     id: string;
     description: string;
@@ -39,6 +45,8 @@ export interface StepContext {
     quick: boolean;
     profiles: readonly Profile[];
     directories: Readonly<Partial<Record<Profile, string>>>;
+    skippedSteps: readonly string[];
+    skippedGuards: readonly string[];
     changed(): readonly string[];
 }
 

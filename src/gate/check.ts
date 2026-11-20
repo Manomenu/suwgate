@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { loadConfig, type Catalog } from "./config.ts";
 import { plan } from "./plan.ts";
 import { report } from "./report.ts";
@@ -48,11 +52,12 @@ export async function check(options: CheckOptions): Promise<CheckResult> {
         changed: () => (changed ??= changedFiles(root)),
     });
     const began = performance.now();
+    const run = mkdtempSync(path.join(tmpdir(), "suwgate-run-"));
     const results = await runSteps(
         steps,
-        { ...options.env, SUWGATE_ROOT: root, SUWGATE_QUICK: options.quick ? "1" : "" },
+        { ...options.env, SUWGATE_ROOT: root, SUWGATE_QUICK: options.quick ? "1" : "", SUWGATE_RUN: run },
         typeof stepLimit === "number" ? stepLimit : null,
-    );
+    ).finally(() => rmSync(run, { recursive: true, force: true }));
     const totalSeconds = Math.round((performance.now() - began) / 1000);
     const { text, passed } = report({
         results,

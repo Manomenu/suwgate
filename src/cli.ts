@@ -8,7 +8,7 @@ import { loadConfig, type Catalog } from "./gate/config.ts";
 import { PROFILES } from "./gate/contract.ts";
 import { repositoryRoot } from "./gate/repository.ts";
 import { guards } from "./guards/index.ts";
-import { stepsFor } from "./profiles/index.ts";
+import { dotnetGuards, stepsFor, verdict } from "./profiles/index.ts";
 import { guardEdit, type EditHookProject, type EditHookSettings } from "./session/guardEdit.ts";
 import { preCommit, runTool } from "./session/preCommit.ts";
 import { stop } from "./session/stop.ts";
@@ -25,10 +25,13 @@ const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate hook <guard-
   suwgate hook pre-commit  git pre-commit hook: gitleaks on the staged changes, then the quick gate
   suwgate dev <db|logs|smoke|server|tmux|checkout-env>
                            the local stack of the repository (the dev section of suwgate.yml); suwgate dev --help
+  suwgate verdict <tests|guards|tsconfig|eslint> ...
+                           what the steps call after their tool: did tests run, did the .NET guards run (evidence),
+                           are the strict compiler options and the eslint rules in effect
 Every step has a ceiling (SUWGATE_STEP_LIMIT seconds overrides them all). A step whose tool is missing is SKIP,
 and a SKIP fails the gate when CI is set. Exit code: 0 green, 1 red, 2 a usage or suwgate.yml problem.`;
 
-const catalog: Catalog = { guards, stepsFor };
+const catalog: Catalog = { guards, dotnetGuards, stepsFor };
 
 function version(): string {
     const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
@@ -52,6 +55,11 @@ function readInput(): string {
 
 async function main(argv: readonly string[]): Promise<number> {
     if (argv[0] === "dev") return dev(argv.slice(1));
+    if (argv[0] === "verdict") {
+        const result = verdict(argv.slice(1));
+        if (result.text !== "") console.error(result.text);
+        return result.exitCode;
+    }
     const { values, positionals } = parseArgs({
         args: [...argv],
         allowPositionals: true,

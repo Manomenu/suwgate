@@ -9,6 +9,16 @@ steps:
       title: the built CLI starts (node dist/cli.js --version after pnpm run build)
       run: pnpm run build >/dev/null && node dist/cli.js --version
       after: [publint]
+guards:
+  skip:
+    - guard: architecture/layers
+      reason: the .NET projects of suwgate are guard packages, not a layered server, so there is no layers.json to check them against
+    - guard: architecture/project-references
+      reason: the allowed references live in layers.json, which suwgate does not have (see architecture/layers); its three projects reference each other in one direction only
+    - guard: architecture/every-project-guarded
+      reason: it checks that every project of layers.json is read and layered, and suwgate has no layers.json (see architecture/layers)
+    - guard: architecture/endpoints
+      reason: suwgate has no server and so no endpoints to map
 exceptions:
   - guard: required-files
     target: layers.json

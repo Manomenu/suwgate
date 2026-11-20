@@ -48,7 +48,11 @@ const steps: readonly Step[] = [
     },
     { id: "absent", title: "needs a missing tool", run: "true", needs: ["suwgate-no-such-tool"] },
 ];
-const catalog: Catalog = { guards: [readme, slowGuard], stepsFor: (profiles) => (profiles.includes("web") ? [...steps] : []) };
+const catalog: Catalog = {
+    guards: [readme, slowGuard],
+    dotnetGuards: [],
+    stepsFor: (profiles) => (profiles.includes("web") ? [...steps] : []),
+};
 
 const run = (root: string, quick = false, env: NodeJS.ProcessEnv = {}) =>
     check({ cwd: root, quick, verbose: false, env: { PATH: process.env["PATH"], ...env }, catalog });
@@ -134,7 +138,7 @@ describe("suwgate check", () => {
             quick: false,
             verbose: true,
             env: { PATH: process.env["PATH"] },
-            catalog: { guards: [], stepsFor: () => contextSteps },
+            catalog: { guards: [], dotnetGuards: [], stepsFor: () => contextSteps },
         });
 
         expect(result.text).toMatch(/PASS +0s {2}nothing to check/);
