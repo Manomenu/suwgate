@@ -12,3 +12,18 @@ steps:
   skip:
     - step: attw
       reason: suwgate ships a command (bin), not an importable module, so attw has no entry point to resolve
+exceptions:
+  - guard: required-files
+    target: criteria.json
+    reason: suwgate has no spec yet, so there are no acceptance criteria to guard; the criteria step comes with the first spec (TODO.md)
+  - guard: required-files
+    target: layers.json
+    reason: the .NET projects of suwgate are guard packages, not a layered server, so there are no layers to describe
+  - guard: docs-paths
+    target: docs/inventory.md
+    reason: the inventory names files of the template and of suwfrontkit, and .NET guard ids such as architecture/layers, none of which are paths of suwgate
+settings:
+  docs-paths:
+    ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/]
+  dependency-direction:
+    forbidden: ["@maniumek/suwfrontkit", "Suwbackkit.*"]
