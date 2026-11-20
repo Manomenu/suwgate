@@ -37,10 +37,16 @@ export interface StepContext {
     root: string;
     cwd: string;
     quick: boolean;
+    profiles: readonly Profile[];
+    directories: Readonly<Partial<Record<Profile, string>>>;
     changed(): readonly string[];
 }
 
-export type Run = string | ((context: StepContext) => string | null);
+export interface Skip {
+    skip: string;
+}
+
+export type Run = string | ((context: StepContext) => string | null | Skip);
 
 export interface Step {
     id: string;
