@@ -260,11 +260,14 @@ the solution, `layers.json`, the sources and the migrations itself, and takes fr
   `GetElapsedTime`, `TickCount`, `DateTime.Now`, `UtcNow` and `Today`, `Thread.Sleep`, `Task.Delay`, `Timeout =` in an attribute),
   and the `*.test`, `*.spec`, `*.e2e`, `*.visual`
   and `*.stories` files and the helpers of an `e2e/` folder (`performance.now`, `Date.now()` in a subtraction, `setTimeout`,
-  `sleep(<n>)`, `waitForTimeout`, `interruptAfterTimeLimit`, and `timeout: <n>` in a Vitest file). It lets through a call that is
+  `sleep(<n>)`, `waitForTimeout`, `interruptAfterTimeLimit`, and `timeout: <n>` in a Vitest file, such as the options of `it`, `test`
+  or `describe`). It lets through a call that is
   handed a `TimeProvider` (a `FakeTimeProvider` in the tests), `Task.Delay` inside a `while`, `for`, `foreach` or `do` loop (a poll)
   or with `Timeout.Infinite`, the timers and the clock of a file that calls `vi.useFakeTimers()`, Playwright's auto-waiting
   `expect` with its own `timeout`, a ceiling against a hang (`CancelAfter`, `new CancellationTokenSource(<delay>)`,
-  `WaitAsync(<TimeSpan>)`: the test waits for an event and fails fast, with its name, if it never comes), and the tools' configs
+  `WaitAsync(<TimeSpan>)`, and the `timeout` option of a Vitest wait for an event: `vi.waitFor`, `vi.waitUntil`, `expect.poll`,
+  Testing Library's `waitFor`, `findBy*` and `findAllBy*`; the test waits for the event and fails fast, with its name, if it never
+  comes: a ceiling, not a speed promise), and the tools' configs
   (`playwright.config.ts`), whose ceilings stop a hang.
 - `human-docs` (every profile): `README.md`, `docs/development.md` and the README of a profile's directory never tell a person to
   run a script meant for agents, one in `scripts/.internal/` or `<name>.Gate/scripts/`; people run `just` recipes. A command is a

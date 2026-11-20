@@ -67,6 +67,11 @@ describe("test-timing", () => {
         ["Myapp.Web/src/notes/notes.test.tsx", "await new Promise((resolve) => setTimeout(resolve, 50));"],
         ["Myapp.Web/src/notes/notes.test.ts", "await sleep(200);"],
         ["Myapp.Web/src/notes/notes.test.ts", 'it("saves", { timeout: 10_000 }, async () => {});'],
+        ["Myapp.Web/src/notes/notes.test.ts", 'test("saves", async () => {}, { timeout: 10_000 });'],
+        ["Myapp.Web/src/notes/notes.test.ts", 'describe("notes", { timeout: 5000 }, () => {});'],
+        ["Myapp.Web/src/notes/notes.test.ts", 'it.each([1])("saves %d", { timeout: 5000 }, async () => {});'],
+        ["Myapp.Web/src/notes/notes.test.ts", 'await vi.waitFor(save, { timeout: 3000 }); it("saves", { timeout: 5000 }, async () => {});'],
+        ["Myapp.Web/src/notes/notes.test.ts", "test.setTimeout(120_000);"],
         ["Myapp.Web/src/notes/notes.test.ts", "fc.assert(property, { interruptAfterTimeLimit: 1000 });"],
         ["Myapp.Web/src/notes/notes.e2e.ts", "await page.waitForTimeout(500);"],
         ["Myapp.Web/src/notes/notes.e2e.ts", "test.setTimeout(120_000);"],
@@ -84,8 +89,35 @@ describe("test-timing", () => {
         ["Myapp.Web/e2e/playwright.config.ts", "export default { timeout: 60_000 };"],
         ["Myapp.Web/src/notes/retry.ts", "setTimeout(retry, 1000);"],
         ["Myapp.Web/src/notes/notes.test.ts", "const due = new Date('2026-01-01');"],
-    ])("passes fake timers, Playwright's auto-waiting, the run's config and production code: %s", async (file, text) => {
-        expect(await web(file, text)).toEqual([]);
+        ["Myapp.Web/src/notes/notes.test.ts", "await vi.waitFor(() => expect(saved).toBe(true), { timeout: 3000 });"],
+        ["Myapp.Web/src/notes/notes.test.ts", "await vi.waitUntil(() => saved, { timeout: 3000, interval: 20 });"],
+        ["Myapp.Web/src/notes/notes.test.ts", "await expect.poll(() => count(), { timeout: 3000 }).toBe(2);"],
+        ["Myapp.Web/src/notes/notes.test.tsx", "await waitFor(() => expect(screen.getByText('Saved')).toBeVisible(), { timeout: 3000 });"],
+        ["Myapp.Web/src/notes/notes.test.tsx", "await screen.findByText('Saved', {}, { timeout: 3000 });"],
+        ["Myapp.Web/src/notes/notes.test.tsx", "await within(list).findAllByRole('listitem', {}, { timeout: 3000 });"],
+    ])(
+        "passes fake timers, Playwright's auto-waiting, a ceiling of a wait for an event, the run's config and production code: %s",
+        async (file, text) => {
+            expect(await web(file, text)).toEqual([]);
+        },
+    );
+
+    it("passes a ceiling of a wait for an event over several lines, and still finds the test's own limit around it", async () => {
+        const file = "Myapp.Web/src/notes/notes.test.ts";
+        const text = [
+            'it("saves", async () => {',
+            "    await vi.waitFor(",
+            "        () => {",
+            "            expect(saved).toBe(true);",
+            "        },",
+            "        { timeout: 3000 },",
+            "    );",
+            "}, {",
+            "    timeout: 10_000,",
+            "});",
+        ].join("\n");
+
+        expect(await web(file, text)).toEqual([`${file}:9`]);
     });
 
     it("states the fix with what it found", async () => {
