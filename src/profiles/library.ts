@@ -1,6 +1,6 @@
 import type { Step, StepContext } from "../gate/contract.ts";
 import { PNPM_INSTALL } from "./node.ts";
-import { has, quoted, read, script } from "./shell.ts";
+import { countedVitest, has, quoted, read, script } from "./shell.ts";
 
 const CHANGESET = script([
     'base=""',
@@ -36,7 +36,7 @@ function consumerAppCommand(build: string): string {
 }
 
 function stories(context: StepContext): string | null {
-    return has(context, STORYBOOK) ? "pnpm exec vitest run --project stories" : null;
+    return has(context, STORYBOOK) ? countedVitest("stories", "pnpm exec vitest run --project stories") : null;
 }
 
 function playwrightVersion(context: StepContext): string | null {
@@ -91,7 +91,7 @@ const after = [PNPM_INSTALL];
 export const librarySteps: readonly Step[] = [
     {
         id: "stories",
-        title: "stories as tests with axe (vitest project stories, Chromium)",
+        title: "stories as tests with axe (vitest project stories, Chromium; 0 tests run fails)",
         profile: "library",
         needs: ["pnpm"],
         after,

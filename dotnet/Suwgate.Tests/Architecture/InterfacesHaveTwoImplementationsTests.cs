@@ -1,6 +1,5 @@
 using Suwgate.Architecture.Design;
 using Suwgate.Architecture.Verification;
-using Suwgate.Database.Migrations;
 
 namespace Suwgate.Tests.Architecture;
 
@@ -102,8 +101,4 @@ public sealed class InterfacesHaveTwoImplementationsTests
     [Fact]
     public void Every_finding_can_be_excepted_and_a_stale_exception_fails() =>
         GuardAssert.HonoursExceptions(new InterfacesHaveTwoImplementations(Types));
-
-    [Fact]
-    public void Suwgate_s_own_guards_pass_it_with_the_exceptions_of_its_suwgate_yml() =>
-        Guards.Verify(InterfacesHaveTwoImplementations.Of(typeof(IGuard).Assembly, typeof(MigrationScriptNames).Assembly));
 }

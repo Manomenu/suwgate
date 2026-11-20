@@ -85,7 +85,7 @@ A step is a value of type `Step` (`src/gate/contract.ts`) in a profile's list in
 | `after`        | steps that must finish first (the build before the tests); everything else runs in parallel                                                          |
 | `limitSeconds` | its ceiling (300 by default)                                                                                                                         |
 
-`StepContext` gives `root`, `cwd`, `quick`, `profiles`, `directories` (as a guard gets them) and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
+`StepContext` gives `root`, `cwd`, `quick`, `profiles`, `directories` (as a guard gets them), `skippedSteps` and `skippedGuards` (the ids `steps.skip` and `guards.skip` name) and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
 helpers that filter them to a step's directory and quote them). A step's output is kept and shown only when it fails.
 
 ## The contract of a .NET guard
@@ -97,11 +97,27 @@ helpers that filter them to a step's directory and quote them). A step's output 
 - the application's xUnit test calls `Guards.Verify(guard)`: it reads this guard's exceptions from the nearest `suwgate.yml` above
   the test's output folder (`SuwgateFile`), lets through what they name, and throws `GuardFailedException` listing every other
   finding and every exception that matches nothing;
-- the packages depend on no test framework: a failed guard is an exception, which every runner reports as a failed test.
+- the packages depend on no test framework: a failed guard is an exception, which every runner reports as a failed test;
+- a profile of guards is an `IGuardProfile` (`Profiles/`): its `Name` is the suwgate profile, and `Guards(context)` returns a
+  `PlannedGuard(Id, Create)` per guard, built only when it runs, from the repository, `suwgate.yml` and the app's `GuardInputs`.
+  `SuwgateGuards.VerifyAll(inputs, profiles)` runs `DotnetProfile` and the profiles the app passes (`DatabaseProfile` of
+  `Suwgate.Database`), skips what `guards.skip` names, and turns a missing input into a problem of that guard;
+- the evidence: when `SUWGATE_EVIDENCE` names a folder, every guard that runs through `VerifyAll` or `Guards.Verify(guard)` appends
+  `<id>\t<passed|failed>` to `guards-<process id>.tsv` there (`Guards.Verify(guard, exceptions)`, the overload of the tests, does
+  not). The CLI lists the same ids in `src/profiles/dotnetGuards.ts`, which validates `guards.skip` and `settings` and tells
+  `dotnet-test` what to ask for; a test of suwgate compares that list with the `GuardId` constants of the C# sources.
 
 The examples: `InterfacesHaveTwoImplementations` (an interface with fewer than two implementations; an SDK's interface is the
-case for an exception) and `MigrationScriptNames` (`NNNN_snake_case.sql`, each number once). `Suwgate.Tests` runs the first on
-suwgate's own assemblies, with the exceptions of this repository's `suwgate.yml`.
+case for an exception) and `MigrationScriptNames` (`NNNN_snake_case.sql`, each number once). `Suwgate.Tests` runs every guard of
+suwgate's profiles on its own assemblies through `VerifyAll`, with the exceptions and skips of this repository's `suwgate.yml`.
+
+## How a step proves its tool ran
+
+`suwgate check` creates a folder for the run and passes it to every step as `SUWGATE_RUN`; it is deleted when the check ends. A
+step that runs tests asks the tool for a machine-readable report in `$SUWGATE_RUN/<step>/` and then calls `suwgate verdict`
+(`src/profiles/verdict.ts`), which reads the report and fails with the fix: `verdict tests` when no test ran, `verdict guards`
+when a .NET guard left no evidence, `verdict tsconfig` and `verdict eslint` when `tsc --showConfig` or `eslint --print-config`
+shows a required option or rule off.
 
 ## Who may import what
 

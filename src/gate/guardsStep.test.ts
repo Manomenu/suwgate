@@ -9,6 +9,7 @@ const config = (exceptions: Config["exceptions"]): Config => ({
     directories: {},
     add: [],
     skip: [],
+    skippedGuards: [],
     exceptions,
     settings: {},
 });

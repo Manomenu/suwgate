@@ -15,6 +15,14 @@ const withSettings: Guard = {
 const build: Step = { id: "dotnet-build", title: "build", run: "true" };
 const catalog: Catalog = {
     guards: [lonelyInterfaces, webOnly, withSettings],
+    dotnetGuards: [
+        { id: "architecture/layers", profile: "dotnet" },
+        {
+            id: "database/migration-script-names",
+            profile: "database",
+            settingsSchema: { type: "object", additionalProperties: false, properties: { directory: { type: "string" } } },
+        },
+    ],
     stepsFor: (profiles) => (profiles.includes("dotnet") ? [build] : []),
 };
 
@@ -36,6 +44,9 @@ describe("a valid suwgate.yml", () => {
                 "exceptions:",
                 "  - { guard: required-files, target: LICENSE, reason: the owner keeps the licence in the README }",
                 "  - { guard: architecture/interfaces, target: Sdk.IClock, reason: the SDK asks for it }",
+                "guards:",
+                "  skip:",
+                "    - { guard: architecture/layers, reason: a library has no layers }",
                 "settings:",
                 "  with-settings: { files: [NOTICE] }",
             ].join("\n"),
@@ -48,6 +59,7 @@ describe("a valid suwgate.yml", () => {
                 directories: {},
                 add: [{ name: "pack", run: "dotnet pack", after: ["dotnet-build"] }],
                 skip: [{ step: "dotnet-build", reason: "built by the pack step" }],
+                skippedGuards: [{ guard: "architecture/layers", reason: "a library has no layers" }],
                 exceptions: [
                     { guard: "required-files", target: "LICENSE", reason: "the owner keeps the licence in the README" },
                     { guard: "architecture/interfaces", target: "Sdk.IClock", reason: "the SDK asks for it" },
@@ -95,6 +107,34 @@ describe("an invalid suwgate.yml is refused with the line and the fix", () => {
         );
         expect(problems("profiles: [web]\nexceptions:\n  - { guard: database/migration-names, target: X, reason: r }\n")[0]).toContain(
             '"database/migration-names" is a guard of the database profile',
+        );
+    });
+
+    it("lets a whole guard be skipped only with a reason, once, when the profiles run it", () => {
+        expect(problems("profiles: [dotnet]\nguards:\n  skip:\n    - guard: architecture/layers\n")).toContain(
+            'suwgate.yml:4:7: guards.skip[0] has no "reason": every skipped guard says why (reason: <why>)',
+        );
+        expect(problems("profiles: [dotnet]\nguards:\n  skip:\n    - { guard: architecture/layer, reason: r }\n")[0]).toContain(
+            'no guard "architecture/layer": the guards are required-files, web-only, with-settings, architecture/layers, database/migration-script-names',
+        );
+        expect(
+            problems("profiles: [dotnet]\nguards:\n  skip:\n    - { guard: database/migration-script-names, reason: r }\n")[0],
+        ).toContain('"database/migration-script-names" runs only for database, which this repository does not have: delete the entry');
+        expect(
+            problems("profiles: [web]\nguards:\n  skip:\n    - { guard: web-only, reason: r }\n    - { guard: web-only, reason: s }\n")[0],
+        ).toContain('"web-only" is skipped twice');
+        expect(
+            problems(
+                "profiles: [web]\nguards:\n  skip:\n    - { guard: web-only, reason: r }\nexceptions:\n  - { guard: web-only, target: X, reason: r }\n",
+            )[0],
+        ).toContain('"web-only" is skipped in guards.skip, so this exception is never checked');
+        expect(problems("profiles: [dotnet]\nguards:\n  skip:\n    - { guard: architecture/layers, reason: r }\n")).toEqual([]);
+    });
+
+    it("checks the settings of a .NET guard with its schema", () => {
+        expect(problems("profiles: [dotnet, database]\nsettings:\n  database/migration-script-names: { directory: sql/up }\n")).toEqual([]);
+        expect(problems("profiles: [dotnet, database]\nsettings:\n  database/migration-script-names: { folder: sql/up }\n")[0]).toContain(
+            'has an unknown key "folder"',
         );
     });
 

@@ -62,14 +62,17 @@ function chosenRun(step: Step, quick: boolean): Run | undefined {
 }
 
 function guardsStep(input: PlanInput): PlannedStep {
+    const skipped = input.config.skippedGuards.map((entry) => entry.guard);
     const active = input.catalog.guards.filter(
         (guard) =>
             (guard.profiles === "every" || guard.profiles.some((profile) => input.config.profiles.includes(profile))) &&
-            (!input.quick || guard.quick !== false),
+            (!input.quick || guard.quick !== false) &&
+            !skipped.includes(guard.id),
     );
+    const skippedHere = input.catalog.guards.filter((guard) => skipped.includes(guard.id)).length;
     return {
         id: GUARDS_STEP,
-        title: `repository guards (${active.length})`,
+        title: `repository guards (${active.length}${skippedHere === 0 ? "" : `, ${skippedHere} skipped in suwgate.yml`})`,
         after: [],
         limitSeconds: DEFAULT_LIMIT_SECONDS,
         inline: async () => {
@@ -98,6 +101,8 @@ export function plan(input: PlanInput): PlannedStep[] {
             quick: input.quick,
             profiles: input.config.profiles,
             directories: input.config.directories,
+            skippedSteps: input.config.skip.map((skipped) => skipped.step),
+            skippedGuards: input.config.skippedGuards.map((skipped) => skipped.guard),
             changed: input.changed,
         };
         const line = typeof run === "string" ? run : run(context);

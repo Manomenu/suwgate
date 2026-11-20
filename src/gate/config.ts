@@ -4,7 +4,7 @@ import path from "node:path";
 import { Ajv2020, type ErrorObject } from "ajv/dist/2020.js";
 import { isNode, LineCounter, parseDocument, type Document } from "yaml";
 
-import { PROFILES, type Guard, type GuardException, type Profile, type Step } from "./contract.ts";
+import { PROFILES, type DotnetGuard, type Guard, type GuardException, type Profile, type Step } from "./contract.ts";
 
 export const CONFIG_FILE = "suwgate.yml";
 
@@ -26,11 +26,17 @@ interface SkippedStep {
     reason: string;
 }
 
+interface SkippedGuard {
+    guard: string;
+    reason: string;
+}
+
 export interface Config {
     profiles: Profile[];
     directories: Partial<Record<Profile, string>>;
     add: AddedStep[];
     skip: SkippedStep[];
+    skippedGuards: SkippedGuard[];
     exceptions: GuardException[];
     settings: Record<string, unknown>;
     quickLimitSeconds?: number;
@@ -40,6 +46,7 @@ interface RawConfig {
     profiles: Profile[];
     directories?: Partial<Record<Profile, string>>;
     steps?: { add?: AddedStep[]; skip?: SkippedStep[] };
+    guards?: { skip?: SkippedGuard[] };
     exceptions?: GuardException[];
     settings?: Record<string, unknown>;
     quick?: { limitSeconds?: number };
@@ -47,6 +54,7 @@ interface RawConfig {
 
 export interface Catalog {
     guards: readonly Guard[];
+    dotnetGuards: readonly DotnetGuard[];
     stepsFor(profiles: readonly Profile[]): readonly Step[];
 }
 
@@ -88,8 +96,8 @@ function describe(error: ErrorObject): string {
     switch (error.keyword) {
         case "required": {
             const missing = String(params["missingProperty"]);
-            const fix =
-                missing === "reason" ? `: every ${parts[0] === "exceptions" ? "exception" : "skipped step"} says why (reason: <why>)` : "";
+            const what = parts[0] === "exceptions" ? "exception" : parts[0] === "guards" ? "skipped guard" : "skipped step";
+            const fix = missing === "reason" ? `: every ${what} says why (reason: <why>)` : "";
             return `${where} has no "${missing}"${fix}`;
         }
         case "additionalProperties":
@@ -172,9 +180,39 @@ function checkSteps(raw: RawConfig, catalog: Catalog, problem: (parts: (string |
     });
 }
 
+function profilesOf(id: string, catalog: Catalog): readonly Profile[] | "every" | null {
+    const dotnet = catalog.dotnetGuards.find((guard) => guard.id === id);
+    if (dotnet !== undefined) return [dotnet.profile];
+    return catalog.guards.find((guard) => guard.id === id)?.profiles ?? null;
+}
+
+function checkSkippedGuards(raw: RawConfig, catalog: Catalog, problem: (parts: (string | number)[], text: string) => void): void {
+    const skipped = (raw.guards?.skip ?? []).map((entry) => entry.guard);
+    (raw.guards?.skip ?? []).forEach((entry, index) => {
+        const where = ["guards", "skip", index, "guard"];
+        const profiles = profilesOf(entry.guard, catalog);
+        if (profiles === null) {
+            const known = [...catalog.guards.map((guard) => guard.id), ...catalog.dotnetGuards.map((guard) => guard.id)];
+            problem(where, `no guard "${entry.guard}": the guards are ${known.join(", ")}`);
+        } else if (profiles !== "every" && !profiles.some((profile) => raw.profiles.includes(profile))) {
+            problem(where, `"${entry.guard}" runs only for ${profiles.join(", ")}, which this repository does not have: delete the entry`);
+        }
+        if (skipped.indexOf(entry.guard) !== index) problem(where, `"${entry.guard}" is skipped twice: keep one entry`);
+    });
+    (raw.exceptions ?? []).forEach((exception, index) => {
+        if (skipped.includes(exception.guard)) {
+            problem(
+                ["exceptions", index],
+                `"${exception.guard}" is skipped in guards.skip, so this exception is never checked: delete it, or the skip`,
+            );
+        }
+    });
+}
+
 function checkSettings(raw: RawConfig, catalog: Catalog, problem: (parts: (string | number)[], text: string) => void): void {
     for (const [id, value] of Object.entries(raw.settings ?? {})) {
-        const guard = catalog.guards.find((candidate) => candidate.id === id);
+        const guard =
+            catalog.guards.find((candidate) => candidate.id === id) ?? catalog.dotnetGuards.find((candidate) => candidate.id === id);
         if (guard?.settingsSchema === undefined) {
             problem(["settings", id], guard === undefined ? `no guard "${id}"` : `the guard "${id}" takes no settings`);
             continue;
@@ -222,6 +260,7 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
     checkDirectories(data, problem);
     checkExceptions(data, catalog, problem);
     checkSteps(data, catalog, problem);
+    checkSkippedGuards(data, catalog, problem);
     checkSettings(data, catalog, problem);
     if (problems.length > 0) return { problems };
     return {
@@ -230,6 +269,7 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
             directories: data.directories ?? {},
             add: data.steps?.add ?? [],
             skip: data.steps?.skip ?? [],
+            skippedGuards: data.guards?.skip ?? [],
             exceptions: data.exceptions ?? [],
             settings: data.settings ?? {},
             ...(data.quick?.limitSeconds === undefined ? {} : { quickLimitSeconds: data.quick.limitSeconds }),

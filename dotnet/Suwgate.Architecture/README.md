@@ -52,39 +52,70 @@ imports any package, so without them there the lock files are off and NuGet audi
 
 ## The guards
 
-Each guard is an `IGuard`; a test calls `Guards.Verify(guard)`, which reads that guard's exceptions from the nearest `suwgate.yml`
-above the test's output folder and fails with every finding no exception names and every exception that names nothing.
+One xUnit test runs every guard of the repository's profiles (`dotnet`: the architecture guards; `database`: the guards of
+`Suwgate.Database`):
 
 ```csharp
-public sealed class ArchitectureTests
+public sealed class GuardTests
 {
-    private static readonly RepositoryFiles Repository = RepositoryFiles.Find();
-    private static readonly LayersFile LayersFile = LayersFile.Read(Repository, "Myapp.Gate/layers.json");
-    private static readonly Assembly[] Assemblies = [typeof(ServerApp).Assembly, typeof(ArchitectureTests).Assembly];
-
     [Fact]
-    public void Layers() => Guards.Verify(new Layers(LayersFile, typeof(ServerApp).Assembly));
-
-    [Fact]
-    public void Interfaces() => Guards.Verify(InterfacesHaveTwoImplementations.Of(Assemblies));
+    public void Every_guard_of_suwgate_passes() =>
+        SuwgateGuards.VerifyAll(
+            new GuardInputs { Production = [typeof(ServerApp).Assembly], Tests = [typeof(GuardTests).Assembly], Server = typeof(ServerApp) },
+            new DatabaseProfile()
+        );
 }
 ```
 
-| Guard id                                           | Construct it with                                             | A finding's target                   |
-| :------------------------------------------------- | :------------------------------------------------------------ | :----------------------------------- |
-| `architecture/layers`                              | the layers file and the layered assemblies                    | a type, or a namespace without layer |
-| `architecture/endpoints`                           | the assembly, the mapping namespace, the suffix (`Endpoints`) | a type, or a crowded namespace       |
-| `architecture/project-references`                  | the repository, the `.slnx` path, the layers file             | `A -> B`, `A internals -> B`, or `A` |
-| `architecture/every-project-guarded`               | the layers file and the assemblies the type guards read       | a project                            |
-| `architecture/interfaces-have-two-implementations` | `Of(assemblies)`                                              | an interface                         |
-| `architecture/nothing-obsolete`                    | the assemblies                                                | a type or `Type.Member`              |
-| `architecture/no-unused-types`                     | the assemblies and the entry points the runtime starts        | a type                               |
-| `architecture/forbidden-type-names`                | `Of(assemblies)`                                              | a namespace prefix or a type         |
-| `architecture/unique-type-names`                   | `Of(assemblies)`                                              | a simple type name                   |
-| `architecture/one-type-per-file`                   | `Repository.CSharpSources()`                                  | a file                               |
-| `architecture/no-escape-hatches`                   | `Repository.CSharpSources()`                                  | a file                               |
-| `architecture/no-fixture-in-field`                 | the test sources, the fixture's type, the class fixture       | a file                               |
-| `architecture/build-settings`                      | the repository                                                | `file: Property`                     |
+`VerifyAll` reads the nearest `suwgate.yml` above the test's output folder (the profiles, `guards.skip`, the exceptions and the
+settings), finds the rest in the repository itself (the one `*.slnx`, the layers file in the root, the C# sources, the test
+projects' sources: every folder ending in `.Tests`, the migrations: the one folder `up` inside a folder `Migrations`, or the
+`directory` setting of `database/migration-script-names`), runs every guard that is not skipped, and fails once with every problem.
+What it cannot find, the test gives in `GuardInputs`:
+
+| Input                          | What it is                                                                                                 |
+| :----------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `Production`                   | the assemblies of the production projects (required)                                                       |
+| `Tests`                        | the test assemblies the type guards read as well (the gate's own, so that `every-project-guarded` sees it) |
+| `Server`                       | the type in the namespace that maps every endpoint; also an entry point of `no-unused-types`               |
+| `EntryPoints`                  | full names of more types the runtime starts; every assembly's `Main` is one already                        |
+| `FixtureField`, `ClassFixture` | the names `no-fixture-in-field` looks for (`TestApp`, `ClassServer`)                                       |
+
+A guard that does not apply is skipped in `suwgate.yml` with its reason, where a reviewer sees it; `suwgate check` validates
+the entry:
+
+```yaml
+guards:
+    skip:
+        - guard: architecture/endpoints
+          reason: a library has no server, so there are no endpoints to map
+```
+
+The evidence: when `SUWGATE_EVIDENCE` names a directory (the `dotnet-test` step of `suwgate check` sets it to a new one for
+every run), every guard that runs, through `VerifyAll` or `Guards.Verify(guard)`, appends `<guard id><TAB>passed|failed` to
+`guards-<process id>.tsv` there. The step then fails unless every guard of the profiles that is not skipped is in it, so a
+deleted or skipped guard test fails the gate. Without the variable nothing is written.
+
+Each guard is also an `IGuard` of its own; a test can call `Guards.Verify(guard)`, which reads that guard's exceptions and fails
+with every finding no exception names and every exception that names nothing. That is the API of 0.1, kept working; a repository
+moves to `VerifyAll` and deletes its per-guard tests in the same change.
+
+| Guard id                                             | Construct it with                                             | A finding's target                   |
+| :--------------------------------------------------- | :------------------------------------------------------------ | :----------------------------------- |
+| `architecture/layers`                                | the layers file and the layered assemblies                    | a type, or a namespace without layer |
+| `architecture/endpoints`                             | the assembly, the mapping namespace, the suffix (`Endpoints`) | a type, or a crowded namespace       |
+| `architecture/project-references`                    | the repository, the `.slnx` path, the layers file             | `A -> B`, `A internals -> B`, or `A` |
+| `architecture/every-project-guarded`                 | the layers file and the assemblies the type guards read       | a project                            |
+| `architecture/interfaces-have-two-implementations`   | `Of(assemblies)`                                              | an interface                         |
+| `architecture/nothing-obsolete`                      | the assemblies                                                | a type or `Type.Member`              |
+| `architecture/no-unused-types`                       | the assemblies and the entry points the runtime starts        | a type                               |
+| `architecture/forbidden-type-names`                  | `Of(assemblies)`                                              | a namespace prefix or a type         |
+| `architecture/unique-type-names`                     | `Of(assemblies)`                                              | a simple type name                   |
+| `architecture/one-type-per-file`                     | `Repository.CSharpSources()`                                  | a file                               |
+| `architecture/no-escape-hatches`                     | `Repository.CSharpSources()`                                  | a file                               |
+| `architecture/no-fixture-in-field`                   | the test sources, the fixture's type, the class fixture       | a file                               |
+| `architecture/build-settings`                        | the repository                                                | `file: Property`                     |
+| `database/migration-script-names` (Suwgate.Database) | the migrations folder                                         | a script                             |
 
 An exception names the guard and the target, and says why:
 

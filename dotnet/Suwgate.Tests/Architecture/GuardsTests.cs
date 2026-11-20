@@ -78,4 +78,36 @@ public sealed class GuardsTests
         Assert.Contains("has no reason: say why it exists", failure.Message, StringComparison.Ordinal);
         root.Delete(recursive: true);
     }
+
+    [Fact]
+    public void The_skipped_guards_and_the_settings_are_read_with_their_reasons()
+    {
+        var root = Directory.CreateTempSubdirectory("suwgate-file-");
+        var file = Path.Combine(root.FullName, "suwgate.yml");
+        File.WriteAllText(
+            file,
+            "profiles: [dotnet, database]\nguards:\n  skip:\n    - guard: architecture/endpoints\n      reason: a library has no server\n"
+                + "settings:\n  database/migration-script-names:\n    directory: sql/up\n  docs-paths:\n    ignore: [a]\n"
+        );
+
+        var settings = SuwgateFile.Read(file);
+
+        Assert.Equal(["dotnet", "database"], settings.Profiles);
+        Assert.Equal([new GuardSkip("architecture/endpoints", "a library has no server")], settings.Skipped);
+        Assert.Equal("sql/up", settings.Setting("database/migration-script-names", "directory"));
+        root.Delete(recursive: true);
+    }
+
+    [Fact]
+    public void A_skipped_guard_without_a_reason_is_refused()
+    {
+        var root = Directory.CreateTempSubdirectory("suwgate-file-");
+        var file = Path.Combine(root.FullName, "suwgate.yml");
+        File.WriteAllText(file, "profiles: [dotnet]\nguards:\n  skip:\n    - guard: architecture/endpoints\n");
+
+        var failure = Assert.Throws<InvalidDataException>(() => SuwgateFile.Read(file));
+
+        Assert.Contains("has no reason: say why it does not apply", failure.Message, StringComparison.Ordinal);
+        root.Delete(recursive: true);
+    }
 }

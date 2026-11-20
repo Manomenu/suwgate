@@ -3,7 +3,7 @@ import { API_CONTRACT } from "./contract.ts";
 import { DATABASE_UP } from "./database.ts";
 import { DOTNET_BUILD, DOTNET_TEST } from "./dotnet.ts";
 import { PNPM_INSTALL } from "./node.ts";
-import { CHECKOUT_ENV, has, hasDevSection, quoted, script, suwgate } from "./shell.ts";
+import { CHECKOUT_ENV, countedPlaywright, has, hasDevSection, quoted, script, suwgate } from "./shell.ts";
 
 const E2E_CONFIG = "e2e/playwright.config.ts";
 
@@ -11,7 +11,7 @@ const PLAYWRIGHT = `pnpm exec playwright test -c ${E2E_CONFIG}`;
 
 function e2e(context: StepContext): string | null {
     if (!has(context, E2E_CONFIG)) return null;
-    if (!hasDevSection(context)) return PLAYWRIGHT;
+    if (!hasDevSection(context)) return script(["set -euo pipefail", ...countedPlaywright("e2e", PLAYWRIGHT)]);
     return script([
         "set -euo pipefail",
         ...CHECKOUT_ENV,
@@ -19,14 +19,14 @@ function e2e(context: StepContext): string | null {
         `${suwgate("dev db up")} >/dev/null`,
         `${suwgate("dev db psql")} -q -d postgres -c "DROP DATABASE IF EXISTS $E2E_DATABASE WITH (FORCE)" -c "CREATE DATABASE $E2E_DATABASE"`,
         `mkdir -p ${quoted(`${context.root}/.artifacts/logs`)}`,
-        PLAYWRIGHT,
+        ...countedPlaywright("e2e", PLAYWRIGHT),
     ]);
 }
 
 export const webSteps: readonly Step[] = [
     {
         id: "e2e",
-        title: `browser tests against the real server and a fresh database of this checkout (playwright, ${E2E_CONFIG})`,
+        title: `browser tests against the real server and a fresh database of this checkout (playwright, ${E2E_CONFIG}; 0 tests run fails)`,
         profile: "web",
         needs: ["pnpm"],
         after: [PNPM_INSTALL, DOTNET_BUILD, DATABASE_UP, DOTNET_TEST, API_CONTRACT],

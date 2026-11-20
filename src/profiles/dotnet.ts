@@ -1,6 +1,7 @@
 import type { Step, StepContext } from "../gate/contract.ts";
 import { DATABASE_UP } from "./database.ts";
-import { CHECKOUT_ENV, changedIn, hasDevSection, quoted, read, tracked, withChanged } from "./shell.ts";
+import { requiredGuards } from "./dotnetGuards.ts";
+import { CHECKOUT_ENV, changedIn, hasDevSection, quoted, read, runDirectory, tracked, verdictCommand, withChanged } from "./shell.ts";
 
 const DOTNET_INPUT =
     /\.(cs|csproj|props|targets|slnx|sln|rsp)$|(^|\/)(\.editorconfig|BannedSymbols\.txt|global\.json|packages\.lock\.json|nuget\.config)$/;
@@ -13,7 +14,7 @@ export const NO_IDLE_BUILD_PROCESSES = "export MSBUILDDISABLENODEREUSE=1 DOTNET_
 
 const BUILD = `${NO_IDLE_BUILD_PROCESSES} && dotnet build --nologo -v quiet`;
 
-const TEST = "dotnet test --no-build --no-progress";
+const TEST_OPTIONS = '--no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
 
 const FORMAT = `${NO_IDLE_BUILD_PROCESSES} && dotnet tool restore >/dev/null`;
 
@@ -37,7 +38,17 @@ export function guardTests(context: StepContext): string | null {
         return GUARD_PACKAGE.test(text) && TEST_PROJECT.test(text);
     });
     if (projects.length === 0) return null;
-    return projects.map((project) => `dotnet test --project ${quoted(project)} --no-build --no-progress`).join(" && ");
+    return projects.map((project) => `dotnet test --project ${quoted(project)} ${TEST_OPTIONS}`).join(" && ");
+}
+
+export function witnessed(context: StepContext, tests: string): string {
+    return [
+        runDirectory(DOTNET_TEST),
+        'export SUWGATE_EVIDENCE="$run/evidence"',
+        tests,
+        verdictCommand(`tests xunit "$run/results" ${quoted("dotnet test")}`),
+        verdictCommand(`guards "$run/evidence" ${requiredGuards(context).map(quoted).join(" ")}`),
+    ].join(" && ");
 }
 
 export const dotnetSteps: readonly Step[] = [
@@ -64,14 +75,14 @@ export const dotnetSteps: readonly Step[] = [
     },
     {
         id: DOTNET_TEST,
-        title: "tests (dotnet test, xUnit v3, with the checkout's databases when suwgate.yml has dev; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
+        title: "tests (dotnet test, xUnit v3, with the checkout's databases when suwgate.yml has dev; fails on 0 tests run and unless every .NET guard of the profiles ran; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
         profile: "dotnet",
         needs: ["dotnet"],
         after: [DOTNET_BUILD, DATABASE_UP],
-        run: (context) => inCheckoutEnv(context, TEST),
+        run: (context) => inCheckoutEnv(context, witnessed(context, `dotnet test ${TEST_OPTIONS}`)),
         quick: (context) => {
             const command = guardTests(context);
-            return command === null ? null : inCheckoutEnv(context, command);
+            return command === null ? null : inCheckoutEnv(context, witnessed(context, command));
         },
         limitSeconds: 600,
     },
