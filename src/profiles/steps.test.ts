@@ -156,6 +156,9 @@ describe("unit-tests", () => {
         expect(
             unitTests(context(repository({ "vitest.config.ts": 'projects: [{ test: { name: "unit" } }, { test: { name: "stories" } }]' }))),
         ).toBe("pnpm exec vitest run --project unit");
+        expect(
+            unitTests(context(repository({ "vitest.config.ts": 'projects: [unitTests({ environment: "jsdom" }), storyTests(options)]' }))),
+        ).toBe("pnpm exec vitest run --project unit");
     });
 });
 

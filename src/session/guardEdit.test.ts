@@ -59,6 +59,8 @@ describe("the edit hook", () => {
         ["web", "Myapp.Web/tsconfig.app.json"],
         ["web", "Myapp.Web/playwright.config.ts"],
         ["library", "knip.json"],
+        ["library", "knip.config.ts"],
+        ["web", "Myapp.Web/prettier.config.js"],
         ["library", "vitest.config.ts"],
         ["library", ".changeset/config.json"],
         ["library", ".storybook/main.ts"],

@@ -29,7 +29,9 @@ const NODE_GATE = [
     "**/vitest.config.ts",
     "**/playwright.config.ts",
     "**/knip.json",
+    "**/knip.config.{ts,js}",
     "**/.prettierrc.json",
+    "**/prettier.config.{js,mjs,ts}",
 ];
 
 const LISTS: Readonly<Record<string, Partial<Lists>>> = {
