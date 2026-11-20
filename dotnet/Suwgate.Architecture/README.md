@@ -36,6 +36,16 @@ The target framework, warnings as errors and the lock files stay in `Directory.B
 imports any package, so without them there the lock files are off and NuGet audit only warns about a vulnerable package.
 `architecture/build-settings` checks they are there and that no project turns a default off.
 
+A setting under a `Condition` (on the property, its `PropertyGroup` or a `When`) counts only where a normal build meets the
+condition: `Configuration` `Debug` or `Release`, `CI` and `GITHUB_ACTIONS` unset or `true`, every other property empty unless the
+repository's MSBuild files set it unconditionally to a plain value. So an override behind a switch only an explicit build sets
+(`<PropertyGroup Condition="'$(SuwagcmsSdkPath)' != ''">`, passed as `-p:SuwagcmsSdkPath=…`) is allowed, one behind
+`'$(Configuration)' == 'Debug'` or `'$(CI)' == ''` is not, and a restore setting in the root props counts only when every normal
+build sets it. A condition the guard cannot evaluate (`Exists(…)`, property functions, items, an `Otherwise`) is treated as one that
+may hold: write it as `'$(Property)' == 'value'`, or add an exception with the reason. The guard reads the operators of
+[MSBuild conditions](https://learn.microsoft.com/visualstudio/msbuild/msbuild-conditions): `==` and `!=` (case-insensitive), `<`,
+`>`, `<=`, `>=` on numbers, `!`, `and`, `or` and parentheses.
+
 ### The rules turned off, and why
 
 | Rule                      | Where         | Why                                                                                                                 |
@@ -73,13 +83,21 @@ projects' sources: every folder ending in `.Tests`, the migrations: the one fold
 `directory` setting of `database/migration-script-names`), runs every guard that is not skipped, and fails once with every problem.
 What it cannot find, the test gives in `GuardInputs`:
 
-| Input                          | What it is                                                                                                 |
-| :----------------------------- | :--------------------------------------------------------------------------------------------------------- |
-| `Production`                   | the assemblies of the production projects (required)                                                       |
-| `Tests`                        | the test assemblies the type guards read as well (the gate's own, so that `every-project-guarded` sees it) |
-| `Server`                       | the type in the namespace that maps every endpoint; also an entry point of `no-unused-types`               |
-| `EntryPoints`                  | full names of more types the runtime starts; every assembly's `Main` is one already                        |
-| `FixtureField`, `ClassFixture` | the names `no-fixture-in-field` looks for (`TestApp`, `ClassServer`)                                       |
+| Input          | What it is                                                                                                 |
+| :------------- | :--------------------------------------------------------------------------------------------------------- |
+| `Production`   | the assemblies of the production projects (required)                                                       |
+| `Tests`        | the test assemblies the type guards read as well (the gate's own, so that `every-project-guarded` sees it) |
+| `Server`       | the type in the namespace that maps every endpoint; also an entry point of `no-unused-types`               |
+| `EntryPoints`  | full names of more types the runtime starts; every assembly's `Main` is one already                        |
+| `ServerTypes`  | the types that start a test server, for `no-fixture-in-field` (`WebApplicationFactory`, `TestServer`)      |
+| `ClassFixture` | the class fixture that `no-fixture-in-field` names in its fix (`ClassServer`)                              |
+
+A guard's settings live in `suwgate.yml` under `settings.<guard id>`; `suwgate check` validates them:
+
+| Setting                                                        | What it does                                                                                         |
+| :------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| `architecture/no-escape-hatches`: `nullForgivingInTests: true` | allows the null-forgiving `!` in the sources of test projects (folders ending in `.Tests`)           |
+| `database/migration-script-names`: `directory: <folder>`       | the folder of the migration scripts, when it is not the one folder `up` inside a folder `Migrations` |
 
 A guard that does not apply is skipped in `suwgate.yml` with its reason, where a reviewer sees it; `suwgate check` validates
 the entry:
@@ -108,12 +126,12 @@ moves to `VerifyAll` and deletes its per-guard tests in the same change.
 | `architecture/every-project-guarded`                 | the layers file and the assemblies the type guards read       | a project                            |
 | `architecture/interfaces-have-two-implementations`   | `Of(assemblies)`                                              | an interface                         |
 | `architecture/nothing-obsolete`                      | the assemblies                                                | a type or `Type.Member`              |
-| `architecture/no-unused-types`                       | the assemblies and the entry points the runtime starts        | a type                               |
+| `architecture/no-unused-types`                       | the assemblies, the entry points, root namespaces, sources    | a type                               |
 | `architecture/forbidden-type-names`                  | `Of(assemblies)`                                              | a namespace prefix or a type         |
 | `architecture/unique-type-names`                     | `Of(assemblies)`                                              | a simple type name                   |
 | `architecture/one-type-per-file`                     | `Repository.CSharpSources()`                                  | a file                               |
-| `architecture/no-escape-hatches`                     | `Repository.CSharpSources()`                                  | a file                               |
-| `architecture/no-fixture-in-field`                   | the test sources, the fixture's type, the class fixture       | a file                               |
+| `architecture/no-escape-hatches`                     | `Repository.CSharpSources()`, `!` allowed in tests or not     | a file                               |
+| `architecture/no-fixture-in-field`                   | the test sources, the server types, the class fixture         | a file                               |
 | `architecture/build-settings`                        | the repository                                                | `file: Property`                     |
 | `database/migration-script-names` (Suwgate.Database) | the migrations folder                                         | a script                             |
 
@@ -126,22 +144,56 @@ exceptions:
       reason: the payment SDK takes an implementation of this interface; the second one is the SDK's test double
 ```
 
+Some guards read more than the compiled references:
+
+- `no-unused-types` counts a type as used when compiled code loses its name: a constant of it named in another type's source
+  (`CamelCase.Pattern`, which the compiler inlines, in `[GeneratedRegex(CamelCase.Pattern)]` or in code), the type named in an
+  attribute argument (`[Kind(Other = typeof(Marker))]`), or a call from an async lambda or top-level statements (read from the IL of
+  the compiler-generated types). The sources are matched by the type's simple name.
+- `no-fixture-in-field` looks at test classes (a class with a `[Fact]` or `[Theory]` method, or an attribute whose name ends in one of
+  them): a field or property initializer, or an assignment in a constructor, that starts a server fails, because xUnit makes the
+  class anew for every test. Starting means `new T(…)`, `new()` for a member of type `T`, or `T.Create(…)` (any static call on `T`),
+  where `T` is one of `ServerTypes` or a class of the test sources that derives from one (`TestApp : WebApplicationFactory<Program>`).
+  The class fixture itself has no tests, so it may start the server; a field that reads the fixture's server (`= server.App`) passes.
+  A repository whose own type is named like a default (a `TestServer` wrapper of the fixture) passes `ServerTypes` without it.
+
 ## The layers file
 
 The repository's own file, read by `layers`, `project-references` and `every-project-guarded`. Every project of the solution is
-listed with what it may reference and show its internals to; a production project lists its layers from the top down, the first
-namespace segment under the project's name, with `|` between the parts of one level (they may not use each other). A project
-whose name ends with `.Tests` needs no layers, and neither does the gate: a project whose assembly references
-`Suwgate.Architecture` or `Suwgate.Database` is a test project of the guards (a production project takes the package for its
-build only), so `architecture/every-project-guarded` skips it without an exception. A project that builds under another name (`<AssemblyName>` in its
-`.csproj`) is matched by that name when the layers file was read with `LayersFile.Read(repository, path)`.
+listed with what it may reference and show its internals to; a production project lists its layers from the top down, with `|`
+between the parts of one level (they may not use each other). A part is a namespace under the project's root namespace:
+
+- one segment (`Notes`) or several (`Conversation.Turns`); a namespace belongs to the longest part it starts with, so
+  `Procedures` and `Procedures.Steps` can sit on different levels;
+- `.` is the root namespace itself; without it the types there are not checked and anything may use them;
+- a namespace that no part covers is a finding, named by its shortest prefix no part starts with.
+
+`areas` gives a part of the layers (an area: `Orders | Billing` on one level, which never use each other) an order of its own
+features, in the same syntax, relative to the area: features use only the features below them, the area's own namespace is free
+unless its layers list `.`, and a namespace of the area that its order does not cover is a finding. `"subFeatures": true` makes every
+namespace one level inside a feature (a part, or a feature of an area) a sub-feature: it may use its feature and everything below,
+but neither its feature nor its sibling sub-features may use it.
 
 ```json
 {
     "projects": {
-        "Myapp.Server": { "layers": ["Api", "Notes | Health", "Database"], "internalsVisibleTo": ["Myapp.Gate", "Myapp.Server.Tests"] },
+        "Myapp.Server": {
+            "layers": ["Api", "Orders | Billing", "Notifications", "Database"],
+            "areas": { "Orders": ["Checkout", "Cart | Payment"], "Billing": ["Invoices", "Taxes"] },
+            "subFeatures": true,
+            "internalsVisibleTo": ["Myapp.Gate", "Myapp.Server.Tests"]
+        },
+        "Myapp.Cli": { "layers": [".", "Commands", "Output", "Files"], "references": ["Myapp.Server"] },
         "Myapp.Server.Tests": { "references": ["Myapp.Server"] },
-        "Myapp.Gate": { "references": ["Myapp.Server"] }
+        "Myapp.Gate": { "references": ["Myapp.Server", "Myapp.Cli"] }
     }
 }
 ```
+
+A project whose name ends with `.Tests` needs no layers, and neither does the gate: a project whose assembly references
+`Suwgate.Architecture` or `Suwgate.Database` is a test project of the guards (a production project takes the package for its
+build only), so `architecture/every-project-guarded` skips it without an exception. A project is keyed by its `.csproj` name; its
+assembly and its root namespace come from `<AssemblyName>` and `<RootNamespace>` of the `.csproj` (each, like MSBuild, the project
+name when it is not set or is an MSBuild expression) when the layers file was read with `LayersFile.Read(repository, path)`, as
+`VerifyAll` does. So a CLI that builds as `myapp` with the root namespace `Myapp.Cli` is checked under `Myapp.Cli`, and
+`no-unused-types` reads every production assembly under its project's root namespace.
