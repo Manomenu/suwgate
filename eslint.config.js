@@ -58,6 +58,7 @@ export default defineConfig(
                 { type: "gate", pattern: "src/gate" },
                 { type: "profiles", pattern: "src/profiles" },
                 { type: "session", pattern: "src/session" },
+                { type: "dev", pattern: "src/dev" },
                 { type: "guards", pattern: "src/guards/*", capture: ["package"] },
             ],
             "boundaries/files": [
@@ -80,7 +81,7 @@ export default defineConfig(
                             from: { file: { categories: "cli" } },
                             allow: {
                                 to: [
-                                    { element: { types: { anyOf: ["gate", "profiles", "session"] } } },
+                                    { element: { types: { anyOf: ["gate", "profiles", "session", "dev"] } } },
                                     { file: { categories: "registry" } },
                                 ],
                             },

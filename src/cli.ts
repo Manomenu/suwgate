@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { check } from "./gate/check.ts";
+import { dev } from "./dev/index.ts";
 import type { Catalog } from "./gate/config.ts";
 import { repositoryRoot } from "./gate/repository.ts";
 import { guards } from "./guards/index.ts";
@@ -10,7 +11,7 @@ import { stepsFor } from "./profiles/index.ts";
 import { guardEdit } from "./session/guardEdit.ts";
 import { stop } from "./session/stop.ts";
 
-const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate hook <guard-edit|stop> | suwgate --help | --version
+const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate hook <guard-edit|stop> | suwgate dev <command> | suwgate --help | --version
   suwgate check            every step of the repository's profiles (suwgate.yml) and the repository guards
   suwgate check --quick    the guards, and the quick steps only for what changed since master; has a time budget
                            (SUWGATE_QUICK_LIMIT seconds, default 20) because the Stop hook runs it after every turn
@@ -18,6 +19,8 @@ const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate hook <guard-
   suwgate hook guard-edit  Claude Code PreToolUse hook: refuses an agent's edit of the gate and of generated files
                            (ALLOW_GATE_EDIT=1 lifts the gate part for one session)
   suwgate hook stop        Claude Code Stop hook: runs the quick gate unless nothing changed since it last passed
+  suwgate dev <db|logs|smoke|server|tmux|checkout-env>
+                           the local stack of the repository (the dev section of suwgate.yml); suwgate dev --help
 Every step has a ceiling (SUWGATE_STEP_LIMIT seconds overrides them all). A step whose tool is missing is SKIP,
 and a SKIP fails the gate when CI is set. Exit code: 0 green, 1 red, 2 a usage or suwgate.yml problem.`;
 
@@ -37,6 +40,7 @@ function readInput(): string {
 }
 
 async function main(argv: readonly string[]): Promise<number> {
+    if (argv[0] === "dev") return dev(argv.slice(1));
     const { values, positionals } = parseArgs({
         args: [...argv],
         allowPositionals: true,
