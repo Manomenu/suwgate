@@ -4,7 +4,7 @@ Rules for anyone, human or AI agent, changing this repository. `CLAUDE.md` only 
 this file is the one to edit. Setup: [docs/development.md](docs/development.md). Not built yet: [TODO.md](TODO.md).
 
 This repository is suwgate, the one quality gate of the owner's repositories: the CLI `@maniumek/suwgate` on npmjs.com
-and the .NET packages `Suwgate.Architecture` and `Suwgate.Database` (packed locally, not published yet). Their
+and the .NET packages `Suwgate.Architecture` and `Suwgate.Database` (published from CI on a `nuget-v*` tag). Their
 public surface (`suwgate.yml` and its schema, the commands, the guard ids, the public .NET types) is a contract with
 every repository that installs them.
 
@@ -32,7 +32,7 @@ every repository that installs them.
 - Every change of `src/` or `schema/` carries a changeset (`just changeset`): patch for a fix, minor for something new,
   and while the version is 0.x also minor for a breaking change, with what a repository must change written in it.
 - Agents never publish, log in to npm or NuGet, or push a release. CI publishes the CLI with npm trusted publishing after
-  the owner merges the "Version Packages" pull request. The .NET packages are packed locally only.
+  the owner merges the "Version Packages" pull request, and the .NET packages with NuGet trusted publishing after the owner pushes the tag `nuget-v<version>` ([docs/ci.md](docs/ci.md), [docs/first-release.md](docs/first-release.md)).
 
 ## Rules
 

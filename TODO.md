@@ -13,5 +13,5 @@
   the code it checks.
 - How a repository without Node (a .NET-only one) runs the CLI: `pnpm dlx @maniumek/suwgate@<version>`, a global install, or a
   pinned version in `suwgate.yml`. Decide before the first such repository switches.
-- Publish `Suwgate.Architecture` and `Suwgate.Database` to nuget.org (trusted publishing from CI), after the first application uses
-  them from the packages `just pack` builds.
+- The first release of the CLI and of `Suwgate.Architecture` and `Suwgate.Database`: [docs/first-release.md](docs/first-release.md). The
+  NuGet publish job is wired and waits for the owner's account, policy and tag.

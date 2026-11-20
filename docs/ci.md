@@ -136,7 +136,26 @@ The pins used here: checkout v7.0.1, pnpm/action-setup v6.1.1, setup-node v7.1.0
 changesets/action v2.1.2 (as in `gate.yml` and `release-npm.yml`), download-artifact v8.0.2 (`9000827ccba6bdab643e8b6fd33ac0654aef8333`),
 NuGet/login v1.2.0 (`8d196754b4036150537f80ac539e15c2f1028841`).
 
+## NuGet versions and tags
+
+Decision: the version of the NuGet packages is the `Version` in `Directory.Build.props`, and a release is the tag `nuget-v<version>` on the
+commit that carries it. The npm release has its own version (changesets, `package.json`) and its own flow, so the two cannot collide: the
+tag filter of `ci.yml` is `nuget-v*`, the tags changesets creates for the CLI (`v0.1.0` or `@maniumek/suwgate@0.1.0`) never match it,
+and the `release` job runs on the `master` branch only, never on a tag.
+
+Why not MinVer with `MinVerTagPrefix=nuget-v` (the README of MinVer, github.com/adamralph/minver, supports the prefix): it needs the full
+git history in every job that builds, or a shallow clone silently falls back to `0.0.0-alpha.0`; every build between tags becomes a
+pre-release such as `0.1.1-alpha.0.3`, which the publish job must then refuse; and it adds a package that the lock files and
+`Directory.Packages.props` must carry. With one version for two packages that move together, the props version costs one line per
+release and the publish job's check (every package is named `<id>.<tag version>.nupkg`) makes a tag that disagrees with the props fail
+before anything is pushed. Switch to MinVer when the packages are versioned independently.
+
+The `publish-nuget` job runs on a `nuget-v*` tag only when the repository variable `NUGET_USER` is set, in the environment `nuget-org`,
+with `id-token: write` on that job alone. A trusted-publishing policy on nuget.org names owner, repository, the workflow file name
+`ci.yml` and that environment. Symbols are packed as `.snupkg` next to each package and pushed with it. The first release is described in
+[first-release.md](first-release.md).
+
 ## suwgate itself
 
 `ci.yml` calls `gate.yml` and `release-npm.yml` from the same repository (`./.github/workflows/...`, which runs at the caller's commit),
-and keeps its own publish job, as above.
+and keeps its own publish jobs (npm, and NuGet on a `nuget-v*` tag), as above.
