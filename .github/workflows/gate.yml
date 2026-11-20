@@ -1,0 +1,103 @@
+name: gate
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: The command that runs the gate from the repository root
+        type: string
+        default: pnpm exec suwgate check --verbose
+      node-version:
+        type: string
+        default: 24.22.1
+      working-directory:
+        description: Folder of the package.json and the lockfile when they are not in the repository root
+        type: string
+        default: .
+      dotnet:
+        description: Install the SDK pinned by global.json
+        type: boolean
+        default: false
+      browser-install-command:
+        description: Command that installs the browser for the tests, empty for none
+        type: string
+        default: ""
+      oasdiff:
+        description: Install oasdiff next to gitleaks and shellcheck
+        type: boolean
+        default: false
+      failure-artifacts:
+        description: Paths kept as the artifact gate-failure when the gate fails (visual diffs, reports), one per line
+        type: string
+        default: |
+          visual/results
+          .artifacts/e2e
+
+permissions: {}
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CI: "1"
+    steps:
+      - name: actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: pnpm/action-setup v6.1.1
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+        with:
+          package_json_file: ${{ inputs.working-directory }}/package.json
+      - name: actions/setup-node v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+      - name: actions/setup-dotnet v6.0.0
+        if: inputs.dotnet
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Install the packages
+        working-directory: ${{ inputs.working-directory }}
+        run: pnpm install --frozen-lockfile
+      - name: Install the browser
+        if: inputs.browser-install-command != ''
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.browser-install-command }}
+      - name: Install gitleaks and shellcheck (pinned, checksum verified, in the runner's temp folder because the repository guards count every untracked file), so the gate never skips them
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          curl -sSfL -o shellcheck.tar.xz https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck.tar.xz" | sha256sum --check
+          tar -xJf shellcheck.tar.xz
+          sudo install shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
+      - name: Install oasdiff (pinned, checksum verified)
+        if: inputs.oasdiff
+        working-directory: ${{ runner.temp }}
+        run: |
+          set -euo pipefail
+          curl -sSfL -o oasdiff.tar.gz https://github.com/oasdiff/oasdiff/releases/download/v1.35.0/oasdiff_1.35.0_linux_amd64.tar.gz
+          echo "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140  oasdiff.tar.gz" | sha256sum --check
+          tar -xzf oasdiff.tar.gz oasdiff
+          sudo install oasdiff /usr/local/bin/oasdiff
+      - name: The gate
+        run: ${{ inputs.command }}
+      - name: Keep the failure files (actions/upload-artifact v7.0.2)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: gate-failure
+          path: ${{ inputs.failure-artifacts }}
+          if-no-files-found: ignore
