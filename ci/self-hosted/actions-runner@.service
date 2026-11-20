@@ -6,9 +6,8 @@ After=podman.socket
 
 [Service]
 WorkingDirectory=%h/.local/share/actions-runner/%i
-ExecStart=%h/.local/share/actions-runner/%i/run.sh
+ExecStart=%h/.local/share/actions-runner/%i/bin/runsvc.sh
 Environment=HOME=%h/.local/share/actions-runner/%i/home
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=DOTNET_INSTALL_DIR=%h/.local/share/actions-runner/%i/home/.dotnet
 Environment=DOCKER_HOST=unix://%t/podman/podman.sock
 Environment=CONTAINER_HOST=unix://%t/podman/podman.sock

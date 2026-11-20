@@ -28,10 +28,14 @@ variables", "GitHub Actions billing".
 
 - One runner per repository in `~/.local/share/actions-runner/<repository>`, registered with the labels `self-hosted`, `Linux`,
   `X64` and `suw-local`, each a systemd user service `actions-runner@<repository>.service` (the template
-  `actions-runner@.service` of this folder; it starts `run.sh`, which also applies the runner's own updates).
+  `actions-runner@.service` of this folder). It starts `bin/runsvc.sh`, as the unit `svc.sh` writes does: it turns systemd's
+  SIGTERM into the SIGINT the listener stops on, and restarts the listener after the runner's own updates; `run.sh` would leave
+  the listener running when the service stops.
 - Each runner has its own `HOME` (`<runner>/home`), so the toolchains the workflows install (.NET through `DOTNET_INSTALL_DIR`,
-  pnpm, the Playwright browser, the NuGet and pnpm caches) never touch the owner's home, and a clean `PATH`. Docker is the
-  owner's rootless podman, through `DOCKER_HOST` and `CONTAINER_HOST` on the podman socket.
+  pnpm, the Playwright browser, the NuGet and pnpm caches) never touch the owner's home. Its `PATH` is the systemd user
+  manager's (`systemctl --user show-environment`), written to the runner's `.path` too, so a job finds the tools installed for
+  the user, such as uv, which a gate step uses to fetch its Python. Docker is the owner's rootless podman, through `DOCKER_HOST`
+  and `CONTAINER_HOST` on the podman socket.
 - `suw-ci-runner-switch.timer` and `.service`, user units that run `runner-switch.sh` from the owner's checkout of suwgate
   (`~/repos/suwgate`, on `master`) with the repositories named in `~/.config/suw-ci-runner-switch.env`.
 - User services run only while the owner is logged in, unless lingering is on: `loginctl show-user "$USER" -p Linger`, and
@@ -69,7 +73,7 @@ Only the owner can push to these repositories. Do not add a runner to a reposito
     token="$(gh api -X POST "repos/<owner>/$repository/actions/runners/registration-token" --jq .token)"
     (cd "$dir" && ./config.sh --unattended --url "https://github.com/<owner>/$repository" --token "$token" \
         --name "$(hostname)-$repository" --labels suw-local --work _work --replace)
-    echo /usr/local/bin:/usr/bin:/bin > "$dir/.path"
+    systemctl --user show-environment | sed -n 's/^PATH=//p' > "$dir/.path"
     install -Dm644 actions-runner@.service ~/.config/systemd/user/actions-runner@.service
     systemctl --user daemon-reload && systemctl --user enable --now "actions-runner@$repository"
     ```
