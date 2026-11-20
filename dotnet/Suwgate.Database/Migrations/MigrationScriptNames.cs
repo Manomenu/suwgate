@@ -14,6 +14,16 @@ public sealed partial class MigrationScriptNames(string directory) : IGuard
 
     public IEnumerable<Finding> Check()
     {
+        if (!Directory.Exists(directory))
+        {
+            return
+            [
+                new Finding(
+                    directory,
+                    "the migrations folder does not exist: pass the folder that holds the NNNN_what_it_does.sql scripts"
+                ),
+            ];
+        }
         var scripts = Directory
             .EnumerateFiles(directory)
             .Select(path => Path.GetFileName(path))

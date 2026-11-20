@@ -41,4 +41,18 @@ public sealed class MigrationScriptNamesTests : IDisposable
         Assert.Equal("0001_create_tags.sql", finding.Target);
         Assert.Contains("taken by 0001_create_notes.sql", finding.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void A_missing_folder_is_found_with_the_fix()
+    {
+        var missing = Path.Combine(up.FullName, "nowhere");
+
+        var finding = Assert.Single(new MigrationScriptNames(missing).Check());
+
+        Assert.Equal(missing, finding.Target);
+        Assert.Contains("pass the folder", finding.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_empty_folder_passes() => Assert.Empty(FindingsFor());
 }
