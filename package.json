@@ -1,6 +1,6 @@
 {
     "name": "@maniumek/suwgate",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "One quality gate for every repository: suwgate check runs the steps of the repository's profiles and its guards, configured in suwgate.yml",
     "license": "MIT",
     "author": "Manomenu",

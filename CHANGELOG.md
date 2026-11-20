@@ -1,5 +1,34 @@
 # @maniumek/suwgate
 
+## 0.3.0
+
+### Minor Changes
+
+- 3d80b32: - `criteria-ran` (every repository, after the test steps): an acceptance criterion of a living spec that a test names must have
+    a test naming it that ran and passed in this gate run, by the reports of xUnit (`--report-xunit-xml`), Vitest and Playwright
+    (JSON). `visual` and `consumer-app` now write Playwright's JSON report as well, and fail when 0 tests ran.
+  - `suwbackkit-wiring` (dotnet): a web server that references `Suwbackkit.Server` calls `AddServerDefaults` and `MapServerDefaults`.
+  - `suwfrontkit-wiring` (web, library): an app that depends on `@maniumek/suwfrontkit` loads `@maniumek/suwfrontkit/theme.css` from
+    its main module or a stylesheet that module imports.
+  
+  What a repository must change: un-skip, or make pass, every test that names a criterion; a skipped test step leaves its criteria
+  out of the check. Wire the kits where the new guards say so.
+- 35efd25: The gate proves that a check ran, from what the tool reports, instead of trusting that a file or a line of text is there:
+  
+  - `dotnet-test` sets `SUWGATE_EVIDENCE` to a fresh folder of the run and fails unless every .NET guard of the profiles ran
+    (`SuwgateGuards.VerifyAll` of Suwgate.Architecture 0.2.0, or `Guards.Verify`), so a deleted or skipped guard test fails the gate.
+    It also runs `dotnet test --zero-tests-policy strict --report-xunit-xml` and fails when no test ran.
+  - `guards.skip` in `suwgate.yml` turns one whole guard off with a reason: a repository guard, or a .NET guard. The CLI knows the
+    .NET guard ids and validates the entries; `settings` take `database/migration-script-names: { directory }`.
+  - `unit-tests`, `stories` and `e2e` fail when Vitest or Playwright ran 0 tests (their JSON reports).
+  - `typecheck` reads `tsc --showConfig` of every tsconfig and fails when a strict option of the preset is off; `lint` reads
+    `eslint --print-config` of a source file and fails unless `suwgate/no-comments` and `boundaries/dependencies` are errors.
+  
+  What a repository must change: on the `dotnet` profile, reference Suwgate.Architecture 0.2.0 and replace the per-guard tests with
+  one `SuwgateGuards.VerifyAll` test (or keep `Guards.Verify` for every guard), skip the guards that do not apply in `guards.skip`
+  with a reason; give every test step at least one test that runs, or skip the step with a reason; a library's ESLint config needs
+  `boundaries/dependencies` at error for its `src/` files.
+
 ## 0.2.0
 
 ### Minor Changes
