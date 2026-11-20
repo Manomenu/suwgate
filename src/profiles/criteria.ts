@@ -8,7 +8,7 @@ import type { Profile, Skip, Step, StepContext } from "../gate/contract.ts";
 import { CONSUMER, VISUAL_CONFIG } from "./library.ts";
 import { onPath, quoted, read, script, tracked } from "./shell.ts";
 
-const CRITERIA_FILE = "criteria.json";
+export const CRITERIA_FILE = "criteria.json";
 
 interface Kind {
     kind: string;

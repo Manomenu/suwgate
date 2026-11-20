@@ -117,7 +117,8 @@ suwgate's profiles on its own assemblies through `VerifyAll`, with the exception
 step that runs tests asks the tool for a machine-readable report in `$SUWGATE_RUN/<step>/` and then calls `suwgate verdict`
 (`src/profiles/verdict.ts`), which reads the report and fails with the fix: `verdict tests` when no test ran, `verdict guards`
 when a .NET guard left no evidence, `verdict tsconfig` and `verdict eslint` when `tsc --showConfig` or `eslint --print-config`
-shows a required option or rule off.
+shows a required option or rule off, `verdict criteria` (the step `criteria-ran`) when a criterion a test names has no test
+that ran and passed in the reports.
 
 ## Who may import what
 

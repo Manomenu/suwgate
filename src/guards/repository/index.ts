@@ -14,6 +14,7 @@ import { repositoryLayout } from "./repositoryLayout.ts";
 import { requiredFiles } from "./requiredFiles.ts";
 import { scriptsCalled } from "./scriptsCalled.ts";
 import { scriptsHelp } from "./scriptsHelp.ts";
+import { suwfrontkitWiring } from "./suwfrontkitWiring.ts";
 import { vsCodeSettings } from "./vsCodeSettings.ts";
 
 export const repositoryGuards: readonly Guard[] = [
@@ -33,4 +34,5 @@ export const repositoryGuards: readonly Guard[] = [
     noRawColors,
     dependencyDirection,
     hooks,
+    suwfrontkitWiring,
 ];
