@@ -112,6 +112,79 @@ public sealed class BuildSettingsTests
     }
 
     [Fact]
+    public void A_conditional_override_that_no_normal_build_meets_passes_and_one_that_a_normal_build_may_meet_is_found()
+    {
+        var findings = FindingsFor(
+            new()
+            {
+                ["Directory.Build.props"] = ThinProps.Replace(
+                    "</Project>",
+                    """
+                      <PropertyGroup>
+                        <UseLocalTools>true</UseLocalTools>
+                      </PropertyGroup>
+                      <PropertyGroup Condition="'$(SuwagcmsSdkPath)' != ''">
+                        <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+                      </PropertyGroup>
+                      <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+                        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+                      </PropertyGroup>
+                      <PropertyGroup>
+                        <Nullable Condition="'$(CI)' == ''">disable</Nullable>
+                        <AnalysisMode Condition="'$(UseLocalTools)' == 'true'">Default</AnalysisMode>
+                        <AnalysisLevel Condition="Exists('local.props')">latest-recommended</AnalysisLevel>
+                      </PropertyGroup>
+                      <Choose>
+                        <When Condition="'$(CI)' == 'true' And '$(SuwagcmsSdkPath)' != ''"><PropertyGroup><RunAnalyzers>false</RunAnalyzers></PropertyGroup></When>
+                        <Otherwise><PropertyGroup><EnableNETAnalyzers>false</EnableNETAnalyzers></PropertyGroup></Otherwise>
+                      </Choose>
+                    </Project>
+                    """,
+                    StringComparison.Ordinal
+                ),
+            }
+        );
+
+        Assert.Equal(
+            [
+                "Directory.Build.props: TreatWarningsAsErrors",
+                "Directory.Build.props: Nullable",
+                "Directory.Build.props: AnalysisMode",
+                "Directory.Build.props: AnalysisLevel",
+                "Directory.Build.props: EnableNETAnalyzers",
+            ],
+            findings.Select(f => f.Target)
+        );
+        Assert.Equal(
+            "it is false, the default is true: delete the line (Suwgate.Architecture sets it) and fix what the build reports",
+            findings[0].Message
+        );
+        Assert.EndsWith(
+            "its condition is one suwgate cannot evaluate, so it may hold in a normal build: write it as '$(Property)' == 'value' over a property "
+                + "only an explicit build sets, or add an exception with the reason",
+            findings[3].Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public void Restore_settings_that_only_some_builds_turn_on_do_not_count()
+    {
+        var findings = FindingsFor(
+            new()
+            {
+                ["Directory.Build.props"] = ThinProps.Replace(
+                    "<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>",
+                    "<RestorePackagesWithLockFile Condition=\"'$(CI)' != ''\">true</RestorePackagesWithLockFile>",
+                    StringComparison.Ordinal
+                ),
+            }
+        );
+
+        Assert.Equal(["Directory.Build.props: RestorePackagesWithLockFile"], findings.Select(f => f.Target));
+    }
+
+    [Fact]
     public void A_missing_root_props_is_found_with_the_fix() =>
         Assert.Equal(
             [

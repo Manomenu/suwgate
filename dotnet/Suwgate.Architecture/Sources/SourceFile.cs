@@ -11,6 +11,8 @@ public sealed class SourceFile(string path, string text)
 
     public SyntaxNode Root => Tree.GetRoot();
 
+    public bool InTestProject => path.Split('/')[..^1].Any(folder => folder.EndsWith(".Tests", StringComparison.Ordinal));
+
     public int LineOf(SyntaxNode node)
     {
         ArgumentNullException.ThrowIfNull(node);

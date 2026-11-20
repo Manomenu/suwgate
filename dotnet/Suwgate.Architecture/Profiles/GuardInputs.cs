@@ -12,7 +12,7 @@ public sealed class GuardInputs
 
     public IReadOnlyList<string> EntryPoints { get; init; } = [];
 
-    public string FixtureField { get; init; } = "TestApp";
+    public IReadOnlyList<string> ServerTypes { get; init; } = ["WebApplicationFactory", "TestServer"];
 
     public string ClassFixture { get; init; } = "ClassServer";
 }

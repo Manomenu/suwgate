@@ -126,6 +126,14 @@ describe("the evidence of the .NET guards", () => {
         expect([...ids].sort()).toEqual(dotnetGuards.map((guard) => guard.id).sort());
     });
 
+    it("validates the setting of no-escape-hatches under the key the .NET guard reads", () => {
+        const source = readFileSync("dotnet/Suwgate.Architecture/Code/NoEscapeHatches.cs", "utf8");
+        const key = /NullForgivingInTestsSetting = "([^"]+)"/.exec(source)?.[1];
+        const schema = dotnetGuards.find((guard) => guard.id === "architecture/no-escape-hatches")?.settingsSchema;
+
+        expect(schema).toMatchObject({ properties: { [key ?? "missing"]: { type: "boolean" } } });
+    });
+
     it("asks for every guard of the active profiles but those suwgate.yml skips", () => {
         const all = dotnetGuards.map((guard) => guard.id);
 

@@ -28,6 +28,28 @@ public sealed class NoEscapeHatchesTests
         );
 
     [Fact]
+    public void With_the_setting_for_tests_the_null_forgiving_operator_is_allowed_in_test_projects_only()
+    {
+        const string text = "class Note { string? Name; dynamic Value; int Length => Name!.Length; }";
+        var findings = new NoEscapeHatches(
+            [new SourceFile("App/Note.cs", text), new SourceFile("App.Tests/NoteTests.cs", text)],
+            nullForgivingInTests: true
+        )
+            .Check()
+            .Select(f => $"{f.Target} {f.Message.Split(':')[1].Trim()}")
+            .ToList();
+
+        Assert.Equal(
+            [
+                "App.Tests/NoteTests.cs `dynamic` switches the compiler off",
+                "App/Note.cs `dynamic` switches the compiler off",
+                "App/Note.cs remove the null-forgiving `!`",
+            ],
+            findings
+        );
+    }
+
+    [Fact]
     public void Every_finding_can_be_excepted_and_a_stale_exception_fails() =>
         GuardAssert.HonoursExceptions(new NoEscapeHatches([new SourceFile("App/Note.cs", "class Note { dynamic Value; }")]));
 }

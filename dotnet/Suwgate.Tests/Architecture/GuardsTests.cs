@@ -88,6 +88,7 @@ public sealed class GuardsTests
             file,
             "profiles: [dotnet, database]\nguards:\n  skip:\n    - guard: architecture/endpoints\n      reason: a library has no server\n"
                 + "settings:\n  database/migration-script-names:\n    directory: sql/up\n  docs-paths:\n    ignore: [a]\n"
+                + "  architecture/no-escape-hatches:\n    nullForgivingInTests: true\n"
         );
 
         var settings = SuwgateFile.Read(file);
@@ -95,6 +96,7 @@ public sealed class GuardsTests
         Assert.Equal(["dotnet", "database"], settings.Profiles);
         Assert.Equal([new GuardSkip("architecture/endpoints", "a library has no server")], settings.Skipped);
         Assert.Equal("sql/up", settings.Setting("database/migration-script-names", "directory"));
+        Assert.Equal("true", settings.Setting("architecture/no-escape-hatches", "nullForgivingInTests"));
         root.Delete(recursive: true);
     }
 

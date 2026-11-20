@@ -3,6 +3,7 @@ using Suwgate.Architecture.Build;
 using Suwgate.Architecture.Code;
 using Suwgate.Architecture.Design;
 using Suwgate.Architecture.Sources;
+using Suwgate.Architecture.Verification;
 
 namespace Suwgate.Architecture.Profiles;
 
@@ -37,14 +38,27 @@ public sealed class DotnetProfile : IGuardProfile
             new(EveryProjectGuarded.GuardId, () => new EveryProjectGuarded(layers.Value, all)),
             new(InterfacesHaveTwoImplementations.GuardId, () => InterfacesHaveTwoImplementations.Of(all)),
             new(NothingObsolete.GuardId, () => new NothingObsolete(all)),
-            new(NoUnusedTypes.GuardId, () => new NoUnusedTypes(Production(inputs), EntryPoints(inputs))),
+            new(
+                NoUnusedTypes.GuardId,
+                () =>
+                {
+                    var names = new ProjectNames(repository);
+                    var production = Production(inputs);
+                    return new NoUnusedTypes(
+                        production,
+                        EntryPoints(inputs),
+                        [.. production.Select(assembly => names.RootNamespaceOfAssembly(assembly.GetName().Name ?? ""))],
+                        sources.Value
+                    );
+                }
+            ),
             new(ForbiddenTypeNames.GuardId, () => ForbiddenTypeNames.Of(all)),
             new(UniqueTypeNames.GuardId, () => UniqueTypeNames.Of(all)),
             new(OneTypePerFile.GuardId, () => new OneTypePerFile(sources.Value)),
-            new(NoEscapeHatches.GuardId, () => new NoEscapeHatches(sources.Value)),
+            new(NoEscapeHatches.GuardId, () => new NoEscapeHatches(sources.Value, NullForgivingInTests(context.Settings))),
             new(
                 NoFixtureInField.GuardId,
-                () => new NoFixtureInField([.. sources.Value.Where(InTestProject)], inputs.FixtureField, inputs.ClassFixture)
+                () => new NoFixtureInField([.. sources.Value.Where(file => file.InTestProject)], inputs.ServerTypes, inputs.ClassFixture)
             ),
             new(BuildSettings.GuardId, () => new BuildSettings(repository)),
         ];
@@ -93,6 +107,13 @@ public sealed class DotnetProfile : IGuardProfile
             .. inputs.EntryPoints,
         ];
 
-    private static bool InTestProject(SourceFile file) =>
-        file.Path.Split('/')[..^1].Any(folder => folder.EndsWith(".Tests", StringComparison.Ordinal));
+    private static bool NullForgivingInTests(SuwgateSettings settings) =>
+        settings.Setting(NoEscapeHatches.GuardId, NoEscapeHatches.NullForgivingInTestsSetting) is { } value
+        && (
+            bool.TryParse(value, out var allowed)
+                ? allowed
+                : throw new InvalidDataException(
+                    $"{settings.Path}: settings.{NoEscapeHatches.GuardId}.{NoEscapeHatches.NullForgivingInTestsSetting} is \"{value}\": set it to true or false"
+                )
+        );
 }
