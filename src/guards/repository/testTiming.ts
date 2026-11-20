@@ -10,6 +10,7 @@ const E2E_HELPER = /(^|\/)e2e\/.+\.[cm]?[jt]sx?$/;
 const TOOL_CONFIG = /\.config\.[cm]?[jt]s$/;
 const VITEST_TEST = /\.test\.[cm]?[jt]sx?$/;
 const FAKE_TIMERS = /\buseFakeTimers\s*\(/;
+const WAITS_FOR_AN_EVENT = /(^|\.)(waitFor|find(All)?By\w+)$|^vi\.waitUntil$|^expect\.poll$/;
 
 interface Rule {
     pattern: RegExp;
@@ -24,6 +25,7 @@ interface WebRule extends Rule {
     name: string;
     faked?: boolean;
     vitestOnly?: boolean;
+    allowed?: (source: string, at: number) => boolean;
 }
 
 interface Call {
@@ -61,8 +63,25 @@ const WEB_RULES: readonly WebRule[] = [
     { name: "sleep or delay", pattern: /\b(sleep|delay)\(\s*\d/, verb: WAITS, faked: true },
     { name: "waitForTimeout", pattern: /\bwaitForTimeout\b/, verb: WAITS },
     { name: "interruptAfterTimeLimit", pattern: /\binterruptAfterTimeLimit\b/, verb: LIMITS },
-    { name: "timeout:", pattern: /\btimeout\s*:\s*[1-9]/, verb: LIMITS, vitestOnly: true },
+    {
+        name: "timeout:",
+        pattern: /\btimeout\s*:\s*[1-9]/,
+        verb: LIMITS,
+        vitestOnly: true,
+        allowed: (source, at) => WAITS_FOR_AN_EVENT.test(enclosingCall(source, at)),
+    },
 ];
+
+function enclosingCall(source: string, at: number): string {
+    let depth = 0;
+    for (let position = at - 1; position >= 0; position--) {
+        const sign = source.charAt(position);
+        if (")]}".includes(sign)) depth++;
+        else if ("([{".includes(sign) && depth > 0) depth--;
+        else if (sign === "(") return /[\w$.]*$/.exec(source.slice(0, position).trimEnd())?.[0] ?? "";
+    }
+    return "";
+}
 
 function blank(text: string): string {
     return text.replace(/[^\n]/g, " ");
@@ -200,12 +219,16 @@ function csharpFindings(file: string, source: string): Finding[] {
 function webFindings(file: string, source: string): Finding[] {
     const faked = FAKE_TIMERS.test(source);
     const rules = WEB_RULES.filter((rule) => !(faked && rule.faked) && (VITEST_TEST.test(file) || rule.vitestOnly !== true));
-    return numberedLines(source).flatMap(({ line, text }) =>
-        rules.flatMap((rule) => {
-            const match = rule.pattern.exec(text);
-            return match === null ? [] : [finding(file, line, rule.name, rule.verb)];
-        }),
-    );
+    let start = 0;
+    return numberedLines(source).flatMap(({ line, text }) => {
+        const lineStart = start;
+        start = source.indexOf("\n", start) + 1;
+        return rules.flatMap((rule) => {
+            const matches = [...text.matchAll(new RegExp(rule.pattern, "g"))];
+            const found = matches.some((match) => rule.allowed?.(source, lineStart + match.index) !== true);
+            return found ? [finding(file, line, rule.name, rule.verb)] : [];
+        });
+    });
 }
 
 function isWebTest(file: string): boolean {

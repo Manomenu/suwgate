@@ -76,9 +76,9 @@ and suwageval -70.
   not by `TMUX` alone, because an editor started from a pane hands `TMUX` down to its terminals. `TMUX_DEV_NO_ATTACH=1` builds
   the session and stops.
 - `checkout-env` prints `export` lines for `eval`. The main checkout and CI keep the plain names (`<database>_e2e`, the e2e
-  ports); a linked git worktree gets its own e2e and test databases and its own e2e port pair, from a hash of the directory
-  name that is the same as `cksum` computes, so the names do not change for a worktree that already has databases. A value
-  already in the environment wins. The builds also stop leaving MSBuild workers behind.
+  ports); a linked git worktree gets its own e2e and test databases and its own e2e port pair, from a hash of the repository's
+  git directory and the worktree's directory name, so worktrees with the same name in two repositories never share a port or a
+  database, and one worktree gets the same ones on every run. A value already in the environment wins. The builds also stop leaving MSBuild workers behind.
 
 ## Moving a repository to it
 
