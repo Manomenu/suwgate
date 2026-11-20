@@ -37,6 +37,12 @@ fmt:
     pnpm exec prettier --write --log-level warn .
     dotnet tool restore >/dev/null && dotnet csharpier format .
 
+# Move the CI of private repositories onto the local runners while the account's Actions minutes are used up, back when not (ci/self-hosted/README.md)
+[group('ci')]
+[positional-arguments]
+ci-runner-switch *args:
+    ci/self-hosted/runner-switch.sh "$@"
+
 # Install packages and tools from the lockfiles, and enable the git hooks
 [group('maintenance')]
 sync:

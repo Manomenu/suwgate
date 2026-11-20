@@ -33,6 +33,9 @@ exceptions:
     target: docs/ci.md
     reason: the CI guide shows a caller's workflow and git refs (origin/master, ./.github/workflows/... in a consuming repository), which are not paths of suwgate
   - guard: docs-paths
+    target: ci/self-hosted/README.md
+    reason: the setup guide of the self-hosted runners names files of the runner (run.sh, bin/runsvc.sh, .path) and of the calling repositories (compose.yaml, compose.ci.yaml), which are not paths of suwgate
+  - guard: docs-paths
     target: README.md
     reason: the README is the user guide of the package, so it names files of the consuming repositories (contract/openapi.json, knip.config.ts, criteria.json) and preset entry points such as tsconfig/strict
   - guard: config-contents

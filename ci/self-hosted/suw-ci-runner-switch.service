@@ -1,0 +1,8 @@
+[Unit]
+Description=Move the CI of the private repositories onto the local runners while the account's Actions minutes are used up
+Documentation=https://github.com/Manomenu/suwgate/blob/master/ci/self-hosted/README.md
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/suw-ci-runner-switch.env
+ExecStart=%h/repos/suwgate/ci/self-hosted/runner-switch.sh --repositories ${REPOSITORIES} $OPTIONS

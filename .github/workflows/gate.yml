@@ -3,6 +3,10 @@ name: gate
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: The runner label of the job, e.g. a self-hosted runner's label while the account's Actions minutes are used up
+        type: string
+        default: ubuntu-24.04
       command:
         description: The command that runs the gate from the repository root
         type: string
@@ -20,6 +24,10 @@ on:
         default: false
       browser-install-command:
         description: Command that installs the browser for the tests, empty for none
+        type: string
+        default: ""
+      browser-deps-command:
+        description: Command that installs the browser's system packages, run on GitHub-hosted runners only (a self-hosted runner brings its own), empty for none
         type: string
         default: ""
       database:
@@ -45,7 +53,7 @@ permissions: {}
 
 jobs:
   gate:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runs-on }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -75,23 +83,29 @@ jobs:
       - name: Install the packages
         working-directory: ${{ inputs.working-directory }}
         run: pnpm install --frozen-lockfile
+      - name: Install the browser's system packages (GitHub-hosted runners only)
+        if: inputs.browser-deps-command != '' && runner.environment == 'github-hosted'
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.browser-deps-command }}
       - name: Install the browser
         if: inputs.browser-install-command != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.browser-install-command }}
-      - name: Install gitleaks and shellcheck (pinned, checksum verified, in the runner's temp folder because the repository guards count every untracked file), so the gate never skips them
+      - name: Install gitleaks and shellcheck (pinned, checksum verified, in the runner's temp folder because the repository guards count every untracked file, and without root so a self-hosted runner needs no sudo), so the gate never skips them
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
+          mkdir -p bin
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum --check
           tar -xzf gitleaks.tar.gz gitleaks
-          sudo install gitleaks /usr/local/bin/gitleaks
+          install gitleaks bin/gitleaks
           curl -sSfL -o shellcheck.tar.xz https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz
           echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck.tar.xz" | sha256sum --check
           tar -xJf shellcheck.tar.xz
-          sudo install shellcheck-v0.11.0/shellcheck /usr/local/bin/shellcheck
-      - name: Install oasdiff (pinned, checksum verified)
+          install shellcheck-v0.11.0/shellcheck bin/shellcheck
+      - name: Install oasdiff (pinned, checksum verified, next to gitleaks)
         if: inputs.oasdiff
         working-directory: ${{ runner.temp }}
         run: |
@@ -99,7 +113,7 @@ jobs:
           curl -sSfL -o oasdiff.tar.gz https://github.com/oasdiff/oasdiff/releases/download/v1.35.0/oasdiff_1.35.0_linux_amd64.tar.gz
           echo "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140  oasdiff.tar.gz" | sha256sum --check
           tar -xzf oasdiff.tar.gz oasdiff
-          sudo install oasdiff /usr/local/bin/oasdiff
+          install oasdiff bin/oasdiff
       - name: The database of the tests (database-command)
         if: inputs.database
         run: ${{ inputs.database-command }}
