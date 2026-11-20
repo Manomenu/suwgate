@@ -15,8 +15,6 @@
 - A dependency-direction guard: a repository with the profile `library` must not depend at runtime on an application's packages,
   and suwgate depends on none of the kits (suwfrontkit, suwbackkit), so a library never pulls an app in and the gate never needs
   the code it checks.
-- `suwgate dev` (the local database, logs, smoke test and the tmux layout of the template's dev scripts), only if those scripts
-  start to drift between repositories; until then they stay copies in each repository, which costs less than a shared command.
 - How a repository without Node (a .NET-only one) runs the CLI: `pnpm dlx @maniumek/suwgate@<version>`, a global install, or a
   pinned version in `suwgate.yml`. Decide before the first such repository switches.
 - Publish `Suwgate.Architecture` and `Suwgate.Database` to nuget.org (trusted publishing from CI), after the first application uses
