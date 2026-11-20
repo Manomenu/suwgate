@@ -27,6 +27,8 @@ const BUILD = `${NO_IDLE_BUILD_PROCESSES} && dotnet build --nologo -v quiet`;
 
 const TEST_OPTIONS = '--no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
 
+const ONLY_AN_EMPTY_RUN_FAILS = "${1:+--ignore-exit-code 8}";
+
 const FORMAT = `${NO_IDLE_BUILD_PROCESSES} && dotnet tool restore >/dev/null`;
 
 export const DOTNET_BUILD = "dotnet-build";
@@ -120,7 +122,7 @@ export const dotnetSteps: readonly Step[] = [
         profile: "dotnet",
         needs: ["dotnet"],
         after: [DOTNET_BUILD, DATABASE_UP],
-        run: (context) => inCheckoutEnv(context, witnessed(context, `dotnet test ${testOptions(context)} "$@"`)),
+        run: (context) => inCheckoutEnv(context, witnessed(context, `dotnet test ${testOptions(context)} ${ONLY_AN_EMPTY_RUN_FAILS} "$@"`)),
         quick: (context) => {
             const command = guardTests(context);
             return command === null ? null : inCheckoutEnv(context, witnessed(context, command));

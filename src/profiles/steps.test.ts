@@ -324,9 +324,41 @@ describe("the .NET steps", () => {
             context(root, { profile: "dotnet", settings: { "dotnet-test": { excludeTraits: ["live=true"] } } }),
         );
 
-        expect(command).toContain("--filter-not-trait 'live=true' \"$@\"");
+        expect(command).toContain("--filter-not-trait 'live=true' ${1:+--ignore-exit-code 8} \"$@\"");
         expect(command).toContain("{ [ $# -gt 0 ] || ");
         expect(line(step("dotnet-test").run, context(root, { profile: "dotnet" }))).not.toContain("--filter-not-trait");
+    });
+
+    it("with arguments, let a test project the filter misses pass, and fail only when no test of the whole run ran", () => {
+        const fakeDotnet = (results: string): string =>
+            [
+                "#!/usr/bin/env bash",
+                'echo "$*" >"$CALLS"',
+                'while [ $# -gt 0 ]; do [ "$1" = --results-directory ] && dir="$2"; shift; done',
+                'mkdir -p "$dir"',
+                `echo '<assemblies><assembly><collection>${results}</collection></assembly></assemblies>' >"$dir/a.xunit.xml"`,
+            ].join("\n");
+        const run = (results: string, args: string[]): { status: number | null; calls: string; output: string } => {
+            const root = repository({ "suwgate.yml": "profiles: [dotnet]\n", "bin/dotnet": fakeDotnet(results) });
+            execFileSync("chmod", ["+x", "bin/dotnet"], { cwd: root });
+            const command = line(step("dotnet-test").run, context(root, { profile: "dotnet" }));
+            if (typeof command !== "string") throw new Error("no command");
+            const calls = path.join(root, "calls.log");
+            const env = { ...process.env, PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`, CALLS: calls, SUWGATE_RUN: root };
+            const result = spawnSync("bash", ["-c", command, "suwgate", ...args], { cwd: root, env, encoding: "utf8" });
+            return { status: result.status, calls: readFileSync(calls, "utf8").trim(), output: result.stdout + result.stderr };
+        };
+
+        const filtered = run('<test name="A.Notes.Saves" result="Pass" />', ["--filter-class", "*Notes*"]);
+        expect(filtered.status).toBe(0);
+        expect(filtered.calls).toContain("--zero-tests-policy strict");
+        expect(filtered.calls).toMatch(/--ignore-exit-code 8 --filter-class \*Notes\*$/);
+
+        const nothing = run('<test name="A.Notes.Saves" result="Skip" />', ["--filter-class", "*Nothing*"]);
+        expect(nothing.status).not.toBe(0);
+        expect(nothing.output).toContain("dotnet test ran 0 tests");
+
+        expect(run('<test name="A.Notes.Saves" result="Pass" />', []).calls).not.toContain("--ignore-exit-code");
     });
 });
 
