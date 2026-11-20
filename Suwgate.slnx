@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/dotnet/">
+    <Project Path="dotnet/Suwgate.Architecture/Suwgate.Architecture.csproj" />
+    <Project Path="dotnet/Suwgate.Database/Suwgate.Database.csproj" />
+    <Project Path="dotnet/Suwgate.Tests/Suwgate.Tests.csproj" />
+  </Folder>
+</Solution>

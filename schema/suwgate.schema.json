@@ -1,0 +1,92 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://unpkg.com/@maniumek/suwgate/schema/suwgate.schema.json",
+    "title": "suwgate.yml",
+    "description": "The quality gate of a repository: its profiles, the steps it adds or skips, and the exceptions from the guards, each with its reason.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["profiles"],
+    "properties": {
+        "profiles": {
+            "description": "What the repository is; each profile brings its default steps and guards.",
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["web", "library", "dotnet", "database"] }
+        },
+        "directories": {
+            "description": "Where a profile's project lives when it is not the repository root, e.g. web: Myapp.Web.",
+            "type": "object",
+            "additionalProperties": false,
+            "propertyNames": { "enum": ["web", "library", "dotnet", "database"] },
+            "patternProperties": {
+                "^": { "$ref": "#/$defs/relativePath" }
+            }
+        },
+        "steps": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "add": {
+                    "description": "Steps this repository runs on top of its profiles' steps.",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["name", "run"],
+                        "properties": {
+                            "name": { "$ref": "#/$defs/id", "description": "The step's id, unique among all steps." },
+                            "run": { "type": "string", "minLength": 1, "description": "A bash command, run in the repository root." },
+                            "title": { "type": "string", "minLength": 1, "description": "What the report calls the step." },
+                            "quick": { "type": "boolean", "description": "Also run it in suwgate check --quick (default false)." },
+                            "after": {
+                                "type": "array",
+                                "uniqueItems": true,
+                                "items": { "$ref": "#/$defs/id" },
+                                "description": "Steps that must finish first."
+                            },
+                            "limitSeconds": { "type": "integer", "minimum": 1, "description": "The step is killed above this." }
+                        }
+                    }
+                },
+                "skip": {
+                    "description": "Steps of the profiles this repository does not run, each with its reason.",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["step", "reason"],
+                        "properties": {
+                            "step": { "$ref": "#/$defs/id" },
+                            "reason": { "$ref": "#/$defs/reason" }
+                        }
+                    }
+                }
+            }
+        },
+        "exceptions": {
+            "description": "Exceptions from the guards: one target of one guard, each with its reason. suwgate check counts them.",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["guard", "target", "reason"],
+                "properties": {
+                    "guard": { "type": "string", "pattern": "^([a-z]+/)?[a-z][a-z0-9-]*$" },
+                    "target": { "type": "string", "minLength": 1 },
+                    "reason": { "$ref": "#/$defs/reason" }
+                }
+            }
+        },
+        "settings": {
+            "description": "Settings of a guard, by its id; the guard's own schema checks them.",
+            "type": "object",
+            "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" }
+        }
+    },
+    "$defs": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "reason": { "type": "string", "pattern": "\\S", "description": "Why: a sentence a reviewer can judge." },
+        "relativePath": { "type": "string", "pattern": "^[^/\\\\][^\\\\]*$" }
+    }
+}

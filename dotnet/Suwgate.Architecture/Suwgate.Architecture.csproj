@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Suwgate.Architecture</RootNamespace>
+    <PackageId>Suwgate.Architecture</PackageId>
+    <Description>Architecture guards for the xUnit tests of a .NET application (layers, forbidden APIs, rules for types, interfaces and names), with the exceptions of suwgate.yml.</Description>
+    <PackageTags>architecture;guards;quality-gate;xunit;suwgate</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Suwgate.Tests" />
+  </ItemGroup>
+</Project>

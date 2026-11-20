@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Suwgate.Database</RootNamespace>
+    <PackageId>Suwgate.Database</PackageId>
+    <Description>Database guards for the xUnit tests of a .NET application (migration scripts, SQL), with the exceptions of suwgate.yml.</Description>
+    <PackageTags>database;migrations;sql;guards;quality-gate;xunit;suwgate</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Suwgate.Architecture/Suwgate.Architecture.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+dist
+node_modules
+pnpm-lock.yaml
+.artifacts
+docs/visual
+CHANGELOG.md
+.changeset/*.md
+dotnet/**/bin
+dotnet/**/obj
+**/packages.lock.json

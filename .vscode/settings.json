@@ -1,0 +1,28 @@
+{
+    "editor.formatOnSave": true,
+    "[csharp]": { "editor.defaultFormatter": "csharpier.csharpier-vscode" },
+    "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[yaml]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "yaml.schemas": { "./schema/suwgate.schema.json": "suwgate.yml" },
+    "dotnet.defaultSolution": "Suwgate.slnx",
+    "dotnet.testWindow.useTestingPlatformProtocol": true,
+    "files.exclude": {
+        "**/bin": true,
+        "**/obj": true,
+        "**/TestResults": true,
+        "**/node_modules": true,
+        "**/dist": true,
+        ".artifacts": true
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "explorer.fileNesting.patterns": {
+        "README.md": "AGENTS.md, CLAUDE.md, TODO.md, CHANGELOG.md, LICENSE, justfile, suwgate.yml, .editorconfig, .gitignore, .gitattributes",
+        "package.json": "pnpm*, eslint*, .prettier*, knip.json, tsconfig*.json, vitest.config.ts",
+        "Suwgate.slnx": "global.json, nuget.config, BannedSymbols.txt, Directory.Build.props, Directory.Build.rsp, Directory.Packages.props, .csharpierrc.json",
+        "*.csproj": "packages.lock.json",
+        "*.ts": "${capture}.test.ts"
+    }
+}

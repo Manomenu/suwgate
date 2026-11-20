@@ -1,0 +1,14 @@
+profiles: [library, dotnet]
+steps:
+  add:
+    - name: dotnet-pack
+      title: the .NET guard packages pack into .artifacts/nupkg (dotnet pack)
+      run: dotnet pack Suwgate.slnx --nologo -v quiet -o .artifacts/nupkg
+      after: [dotnet-test]
+    - name: cli-from-dist
+      title: the built CLI starts (node dist/cli.js --version after pnpm run build)
+      run: pnpm run build >/dev/null && node dist/cli.js --version
+      after: [publint]
+  skip:
+    - step: attw
+      reason: suwgate ships a command (bin), not an importable module, so attw has no entry point to resolve

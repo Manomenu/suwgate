@@ -1,0 +1,11 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.tgz binary
+*.nupkg binary
+
+**/pnpm-lock.yaml linguist-generated=true
+**/packages.lock.json linguist-generated=true
