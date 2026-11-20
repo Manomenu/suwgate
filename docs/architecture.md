@@ -4,14 +4,14 @@
 
 One line per top-level folder (at most 300 characters each).
 
-- `src/` — the CLI: `cli.ts` (the commands, and the one place that wires the gate to the guards and the steps), `gate/` (the gate itself), `guards/` (repository guards, one folder per work package), `profiles/` (the steps of each profile), `session/` (the Claude Code hooks), `dev/` (`suwgate dev`, the local stack: [dev.md](dev.md)).
+- `src/` — the CLI: `cli.ts` (the commands; the one place that wires everything), `gate/` (the gate), `guards/` (repository guards, a folder per package), `profiles/` (steps per profile), `session/` (Claude Code hooks), `dev/` (`suwgate dev`: [dev.md](dev.md)).
 - `schema/` — `suwgate.schema.json`, the JSON Schema of `suwgate.yml`; shipped in the npm package, read by the CLI and by VS Code (`yaml.schemas`).
 - `dotnet/` — the .NET guards: `Suwgate.Architecture` (with the contract in `Verification/`), `Suwgate.Database`, and `Suwgate.Tests` (xUnit v3, one folder per package).
 - `docs/` — for people working on suwgate: this map and the contracts, `development.md`, `inventory.md` (what is still to be moved here and by whom), decisions in `adr/`, specs in `visual/spec/` and drafts in `draft/spec/`.
 - `.changeset/` — changesets of the CLI: one Markdown file per change waiting for the next release, and the config (base branch `master`, only `src/` and `schema/` need one).
 - `.github/` — `workflows/ci.yml`: the gate on every push and pull request (suwgate checks itself from the sources), then on `master` the release of the CLI with changesets and npm trusted publishing.
 - `.claude/` — the committed Claude Code settings: the Stop hook runs the quick gate, the PreToolUse hook refuses an agent's edit of the gate and of generated files; both are `suwgate hook` commands run from the sources.
-- `.githooks/` — `pre-commit`: gitleaks on what is staged, then `suwgate check --quick` from the sources; `just sync` enables it.
+- `.githooks/` — `pre-commit`: `suwgate hook pre-commit` from the sources (gitleaks on what is staged, then the quick gate); `just sync` enables it.
 - `.config/` — `dotnet-tools.json`: CSharpier at a pinned version, for the `dotnet-format` step.
 - `.vscode/` — the editor's glue: recommended extensions, formatter per language, `yaml.schemas` for `suwgate.yml`, tasks that run the gate. No style rules.
 

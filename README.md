@@ -39,8 +39,46 @@ exceptions:
   exception that no longer matches anything fails the gate until it is deleted.
 - The schema is in the package, `schema/suwgate.schema.json`. VS Code checks the file as you type with
   `"yaml.schemas": { "./node_modules/@maniumek/suwgate/schema/suwgate.schema.json": "suwgate.yml" }` in `.vscode/settings.json`.
-- An agent cannot edit `suwgate.yml`: `suwgate hook guard-edit` (a Claude Code PreToolUse hook) refuses it, as it refuses the
-  other files of the gate, until the owner starts a session with `ALLOW_GATE_EDIT=1`.
+- `settings` configure a guard by its id, for example `dependency-direction: { applications: [Myapp.*] }` or
+  `agents-file: { acronyms: [NUGET] }`; the schema of each guard's settings is in its source, and `suwgate check` validates them.
+
+## Hooks
+
+Three lines wire the hooks; `.claude/settings.json`:
+
+```json
+{
+    "hooks": {
+        "Stop": [
+            { "hooks": [{ "type": "command", "command": "\"${CLAUDE_PROJECT_DIR}/node_modules/.bin/suwgate\" hook stop", "timeout": 600 }] }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+                "hooks": [{ "type": "command", "command": "\"${CLAUDE_PROJECT_DIR}/node_modules/.bin/suwgate\" hook guard-edit" }]
+            }
+        ]
+    }
+}
+```
+
+and `.githooks/pre-commit` (`git config core.hooksPath .githooks` enables it):
+
+```sh
+#!/usr/bin/env bash
+exec node_modules/.bin/suwgate hook pre-commit
+```
+
+- `hook stop` runs the quick gate after an agent's turn, unless nothing changed since it last passed.
+- `hook guard-edit` refuses an agent's edit of the gate (`suwgate.yml`, the criteria file, the hooks, the workflows, `.editorconfig`,
+  and the lint, type and build configs of the repository's profiles, the layers file of a .NET server among them) until the owner starts a session
+  with `ALLOW_GATE_EDIT=1`. It always refuses generated files (lockfiles, the API contract and types) with the command that
+  regenerates them and an existing migration script, and refuses a recorded characterization test that git tracks. It guards only
+  files of its own project (`CLAUDE_PROJECT_DIR`, else the checkout it runs in), so a session never blocks another repository.
+  `settings.hooks` adds the repository's own: `protected` (globs), `generated` (`path` and `command`), `recordings`, `migrations`.
+- `hook pre-commit` runs gitleaks on the staged changes, then the quick gate, and refuses the commit if either fails
+  ([docs/adr/0001-suwgate-hook-pre-commit.md](docs/adr/0001-suwgate-hook-pre-commit.md)).
+- The `hooks` guard checks that these lines are there.
 
 In the xUnit tests of a .NET application:
 
