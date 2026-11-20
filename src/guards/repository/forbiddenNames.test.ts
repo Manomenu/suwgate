@@ -57,6 +57,16 @@ describe("forbidden-names", () => {
         ]);
     });
 
+    it("lets a file carry Base, as a type may, and refuses it as a folder or project, as a namespace segment", async () => {
+        const files = {
+            "Myapp.Server/KnowledgeBases/KnowledgeBaseView.cs": "",
+            "src/knowledge-bases/knowledgeBaseForm.ts": "",
+            "Myapp.Server/Base/Entity.cs": "",
+        };
+
+        expect(shown(await findingsOf(forbiddenNames, files, { profiles: ["web", "dotnet"] }))).toEqual(["Myapp.Server/Base"]);
+    });
+
     it("takes more words and ignored paths from its settings", async () => {
         const files = { "src/stores/notes.ts": "", "visual/snapshots/ui--button.png": "" };
 
