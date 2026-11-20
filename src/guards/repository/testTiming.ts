@@ -15,6 +15,7 @@ const WAITS_FOR_AN_EVENT = /(^|\.)(waitFor|find(All)?By\w+)$|^vi\.waitUntil$|^ex
 interface Rule {
     pattern: RegExp;
     verb: string;
+    fix?: string;
 }
 
 interface CallRule extends Rule {
@@ -38,15 +39,24 @@ const MEASURES = "measures real time";
 const READS_CLOCK = "reads the real clock";
 const WAITS = "waits on real time";
 const LIMITS = "limits the test in real time";
+const REAL_CLOCK_FIX =
+    "a test runs on a FakeTimeProvider (Microsoft.Extensions.Time.Testing), never on the real clock: hand the code a new FakeTimeProvider() and move time with its Advance or SetUtcNow";
 
 const CSHARP_RULES: readonly Rule[] = [
     { pattern: /\b(?<found>Stopwatch|GetElapsedTime|GetTimestamp|TickCount64|TickCount)\b/dg, verb: MEASURES },
     { pattern: /\b(?<found>(DateTime|DateTimeOffset)\.(Now|UtcNow|Today))\b/dg, verb: READS_CLOCK },
     { pattern: /\b(?<found>Thread\.Sleep)\b/dg, verb: "sleeps on real time" },
     { pattern: /\[[^[\]]*?\b(?<found>Timeout\s*=)(?!=)/dg, verb: LIMITS },
+    { pattern: /\b(?<found>TimeProvider\.System)\b/dg, verb: "is the real clock, not a FakeTimeProvider", fix: REAL_CLOCK_FIX },
 ];
 
-const onFakeClock = (call: Call): boolean => call.args.slice(1).some((arg) => /provider|clock/i.test(arg));
+const FAKE_CLOCK = /provider|clock/i;
+const onFakeClock = (call: Call): boolean => call.args.slice(1).some((arg) => FAKE_CLOCK.test(arg));
+
+const CONSTRUCTED = /\bnew\s+(?<type>[A-Za-z_][\w.]*)\s*(?:<[^<>()]*>)?\s*\(|\bnew\s*\(/g;
+const INTERVAL = /^(?:\w+\s*:\s*)?(?:TimeSpan\.From\w+\s*\(|new\s+TimeSpan\s*\()/;
+const NOT_A_WAIT = new Set(["CancellationTokenSource", "DateTimeOffset", "TimeSpan"]);
+const DECLARED_TYPE = /\b(?<type>[A-Za-z_]\w*)\s*(?:<[^<>()]*>)?\s+[A-Za-z_]\w*\s*=\s*$/;
 
 const CSHARP_CALLS: readonly CallRule[] = [
     {
@@ -196,8 +206,33 @@ function argumentsOf(text: string, open: number): string[] {
     return args.filter((arg) => arg !== "");
 }
 
-function finding(file: string, line: number, found: string, verb: string): Finding {
-    return { target: file, line, message: `${found.replace(/\s+/g, " ")} ${verb}: ${FIX}` };
+function finding(file: string, line: number, found: string, verb: string, fix = FIX): Finding {
+    return { target: file, line, message: `${found.replace(/\s+/g, " ")} ${verb}: ${fix}` };
+}
+
+function constructedType(text: string, match: RegExpExecArray): string {
+    const named = match.groups?.["type"];
+    if (named !== undefined) return named.split(".").at(-1) ?? named;
+    return DECLARED_TYPE.exec(text.slice(0, match.index))?.groups?.["type"] ?? "";
+}
+
+function constructorFindings(file: string, text: string): Finding[] {
+    return [...text.matchAll(CONSTRUCTED)].flatMap((match) => {
+        const type = constructedType(text, match);
+        if (NOT_A_WAIT.has(type)) return [];
+        const args = argumentsOf(text, match.index + match[0].length - 1);
+        const interval = args.find((arg) => INTERVAL.test(arg));
+        if (interval === undefined || args.some((arg) => FAKE_CLOCK.test(arg))) return [];
+        return [
+            finding(
+                file,
+                lineAt(text, match.index),
+                `${interval.replace(/^\w+\s*:\s*/, "")} handed to new ${type}(…)`,
+                "gives the code a real-time interval without a TimeProvider",
+                `${FIX}; a ceiling against a hang stays allowed (new CancellationTokenSource(<delay>), CancelAfter, WaitAsync(<TimeSpan>), an HttpClient's Timeout)`,
+            ),
+        ];
+    });
 }
 
 function csharpFindings(file: string, source: string): Finding[] {
@@ -205,7 +240,7 @@ function csharpFindings(file: string, source: string): Finding[] {
     const plain = CSHARP_RULES.flatMap((rule) =>
         [...text.matchAll(rule.pattern)].flatMap((match) => {
             const found = match.indices?.groups?.["found"];
-            return found === undefined ? [] : [finding(file, lineAt(text, found[0]), text.slice(found[0], found[1]), rule.verb)];
+            return found === undefined ? [] : [finding(file, lineAt(text, found[0]), text.slice(found[0], found[1]), rule.verb, rule.fix)];
         }),
     );
     const calls = CSHARP_CALLS.flatMap((rule) =>
@@ -213,7 +248,7 @@ function csharpFindings(file: string, source: string): Finding[] {
             .filter((match) => !rule.allowed({ text, at: match.index, args: argumentsOf(text, match.index + match[0].length - 1) }))
             .map((match) => finding(file, lineAt(text, match.index), match[0].replace(/^\.|\s*\($/g, ""), rule.verb)),
     );
-    return [...plain, ...calls].sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+    return [...plain, ...calls, ...constructorFindings(file, text)].sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
 }
 
 function webFindings(file: string, source: string): Finding[] {

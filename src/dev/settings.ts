@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { parse } from "yaml";
@@ -18,6 +18,7 @@ export interface DevSettings {
     compose: { file: string; profile: string; databaseService: string; serverService: string; extraServices: string[] };
     database: { user: string; password: string; name: string; up: string | null; psql: string | null };
     serverProject: string | null;
+    dotnetDirectory: string | null;
     webDirectory: string | null;
     logFile: string;
     smokeChecks: SmokeCheck[];
@@ -154,7 +155,8 @@ export function resolveSettings(raw: unknown, directories: Readonly<Record<strin
             up: databaseRaw["up"] === undefined ? null : text(databaseRaw, "up", "dev.database", "", problems),
             psql: databaseRaw["psql"] === undefined ? null : text(databaseRaw, "psql", "dev.database", "", problems),
         },
-        serverProject: typeof serverRaw["project"] === "string" ? serverRaw["project"] : stringOrNull(directories["dotnet"]),
+        serverProject: serverRaw["project"] === undefined ? null : text(serverRaw, "project", "dev.server", "", problems),
+        dotnetDirectory: stringOrNull(directories["dotnet"]),
         webDirectory: stringOrNull(directories["web"]),
         logFile: text(serverRaw, "logFile", "dev.server", ".artifacts/logs/server.jsonl", problems),
         smokeChecks: smokeChecks(top["smoke"], problems),
@@ -178,14 +180,36 @@ export function loadSettings(root: string): DevSettings {
     return resolveSettings(data["dev"], directories, root);
 }
 
-export function needServerProject(settings: DevSettings): string {
-    if (settings.serverProject === null) {
-        throw new Failure(
-            "no server project: set directories.dotnet (or dev.server.project) in suwgate.yml to the folder of the server's .csproj",
-            2,
-        );
+const WEB_SDK = /\bSdk\s*=\s*"Microsoft\.NET\.Sdk\.Web[/"]|<Sdk\s+Name\s*=\s*"Microsoft\.NET\.Sdk\.Web"/;
+const NOT_SOURCES = new Set(["node_modules", "bin", "obj"]);
+
+function webProjects(root: string, folder: string): string[] {
+    let entries;
+    try {
+        entries = readdirSync(path.join(root, folder), { withFileTypes: true });
+    } catch {
+        return [];
     }
-    return settings.serverProject;
+    return entries.flatMap((entry) => {
+        const relative = folder === "" ? entry.name : `${folder}/${entry.name}`;
+        if (entry.isDirectory()) return entry.name.startsWith(".") || NOT_SOURCES.has(entry.name) ? [] : webProjects(root, relative);
+        return entry.name.endsWith(".csproj") && WEB_SDK.test(readFileSync(path.join(root, relative), "utf8")) ? [relative] : [];
+    });
+}
+
+export function needServerProject(settings: DevSettings): string {
+    if (settings.serverProject !== null) return settings.serverProject;
+    const under = settings.dotnetDirectory ?? "";
+    const found = webProjects(settings.root, under.replace(/^\.\/?|\/+$/g, "")).sort();
+    const [project] = found;
+    if (project !== undefined && found.length === 1) return path.posix.dirname(project);
+    const where = under === "" ? "the repository" : under;
+    throw new Failure(
+        found.length === 0
+            ? `no server project: no .csproj in ${where} uses Sdk="Microsoft.NET.Sdk.Web"; set dev.server.project in suwgate.yml to the folder of the server's .csproj`
+            : `${found.length} server projects use Sdk="Microsoft.NET.Sdk.Web" (${found.join(", ")}): set dev.server.project in suwgate.yml to the folder of the one suwgate dev server runs`,
+        2,
+    );
 }
 
 export function needWebDirectory(settings: DevSettings): string {

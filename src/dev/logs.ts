@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -118,6 +118,42 @@ export function newestLog(directory: string): string | null {
     return files.sort((left, right) => right.time - left.time)[0]?.file ?? null;
 }
 
+const RECIPE = /^@?([A-Za-z_][\w-]*)(?:\s[^:]*)?:(?!=)/;
+
+function justFiles(root: string): { file: string; module: string }[] {
+    const entries = (() => {
+        try {
+            return readdirSync(root, { withFileTypes: true });
+        } catch {
+            return [];
+        }
+    })();
+    return entries.flatMap((entry) => {
+        if (entry.isFile() && entry.name === "justfile") return [{ file: path.join(root, entry.name), module: "" }];
+        if (entry.isFile() && entry.name.endsWith(".just"))
+            return [{ file: path.join(root, entry.name), module: entry.name.replace(/\.just$/, "") }];
+        const nested = path.join(root, entry.name, "mod.just");
+        return entry.isDirectory() && existsSync(nested) ? [{ file: nested, module: entry.name }] : [];
+    });
+}
+
+function recipeRunning(root: string, command: RegExp): string | null {
+    for (const { file, module } of justFiles(root)) {
+        let recipe: string | undefined;
+        for (const text of readFileSync(file, "utf8").split("\n")) {
+            if (!/^\s/.test(text)) recipe = text.trim() === "" ? recipe : RECIPE.exec(text)?.[1];
+            else if (recipe !== undefined && command.test(text)) return `just ${module === "" ? "" : `${module} `}${recipe}`;
+        }
+    }
+    return null;
+}
+
+function startHint(root: string): string {
+    const stack = recipeRunning(root, /\bdev\s+tmux\s+start\b/) ?? "suwgate dev tmux start";
+    const server = recipeRunning(root, /\bdev\s+server\b/) ?? "suwgate dev server";
+    return `Start the server with \`${stack}\` (or \`${server}\`)`;
+}
+
 export async function runLogs(command: LogsCommand, settings: DevSettings, exec: Exec, io: Io, cwd: string): Promise<number> {
     let sourceName: string;
     let content: string;
@@ -131,7 +167,7 @@ export async function runLogs(command: LogsCommand, settings: DevSettings, exec:
             command.file === "" ? newestLog(path.dirname(path.join(settings.root, settings.logFile))) : path.resolve(cwd, command.file);
         if (file === null) {
             throw new Failure(
-                "suwgate dev logs: no log file yet. Start the server with `suwgate dev tmux start` (or `suwgate dev server`), or run the browser tests (they write the logs), or read the container stack with --compose.",
+                `suwgate dev logs: no log file yet. ${startHint(settings.root)}, or run the browser tests (they write the logs), or read the container stack with --compose.`,
             );
         }
         try {

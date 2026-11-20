@@ -110,6 +110,16 @@ describe("the guards step", () => {
         expect(onItsBranch.passed).toBe(false);
     });
 
+    it("asks to delete a one-time exception of a .NET guard once master has it, which the .NET packages then ignore", async () => {
+        const once = { guard: "architecture/layers", target: "App.Server", reason: "the owner approved it", once: true };
+
+        const summary = await runGuards({ root: "/", guards: [interfaces], files: [], config: config([once]), merged: [once] });
+
+        expect(summary.log).toContain(
+            "architecture/layers: App.Server: the one-time exception is on master now and excepts nothing: delete it from suwgate.yml",
+        );
+    });
+
     it("turns a guard that throws into a finding instead of stopping the gate", async () => {
         const summary = await runGuards({
             root: "/",

@@ -164,10 +164,10 @@ describe("exceptions narrowed to one finding, and one-time exceptions", () => {
         ).toEqual([]);
     });
 
-    it("refuses message and once on a .NET guard, whose packages match by target only", () => {
+    it("takes message and once on a .NET guard too", () => {
         expect(
-            problems("profiles: [dotnet]\nexceptions:\n  - { guard: architecture/layers, target: X, once: true, reason: r }\n")[0],
-        ).toContain("the .NET packages match an exception by its target only: delete message and once");
+            problems("profiles: [dotnet]\nexceptions:\n  - { guard: architecture/layers, target: X, message: m, once: true, reason: r }\n"),
+        ).toEqual([]);
     });
 });
 

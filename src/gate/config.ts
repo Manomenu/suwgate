@@ -154,12 +154,6 @@ function checkExceptions(raw: RawConfig, catalog: Catalog, problem: (parts: (str
                 `no guard "${exception.guard}": the guards are ${catalog.guards.map((guard) => guard.id).join(", ")} (and architecture/*, database/* of the .NET packages)`,
             );
         } else if (profiles === "dotnet-guard") {
-            if (exception.message !== undefined || exception.once !== undefined) {
-                problem(
-                    where,
-                    `"${exception.guard}" is a .NET guard, and the .NET packages match an exception by its target only: delete message and once`,
-                );
-            }
             const prefix = Object.keys(DOTNET_GUARD_PREFIXES).find((candidate) => exception.guard.startsWith(candidate)) ?? "";
             const needed = DOTNET_GUARD_PREFIXES[prefix];
             if (needed !== undefined && !raw.profiles.includes(needed)) {

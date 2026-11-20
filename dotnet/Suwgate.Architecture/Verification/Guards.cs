@@ -21,11 +21,11 @@ public static class Guards
         return
         [
             .. findings
-                .Where(finding => !own.Any(exception => exception.Target == finding.Target))
+                .Where(finding => !own.Any(exception => exception.Matches(finding)))
                 .Select(finding => $"{guard.Id}: {finding.Target}: {finding.Message}"),
-            .. own.Where(exception => !findings.Any(finding => finding.Target == exception.Target))
+            .. own.Where(exception => !findings.Any(exception.Matches))
                 .Select(exception =>
-                    $"{guard.Id}: {exception.Target}: the exception in {SuwgateFile.Name} matches nothing any more: delete it"
+                    $"{guard.Id}: {exception.Target}: the exception in {SuwgateFile.Name}{(exception.Message is null ? "" : $" (message: {exception.Message})")} matches nothing any more: delete it"
                 ),
         ];
     }

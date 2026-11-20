@@ -144,6 +144,10 @@ exceptions:
       reason: the payment SDK takes an implementation of this interface; the second one is the SDK's test double
 ```
 
+`message` narrows an exception to the target's findings whose message contains that text, and `once: true` makes it hold only
+while the `suwgate.yml` of master (the merge base with `master`, or with the remote's) does not have it: after the merge it
+excepts nothing and is never stale. Both mean what they mean for the repository guards of the CLI.
+
 Some guards read more than the compiled references:
 
 - `no-unused-types` counts a type as used when compiled code loses its name: a constant of it named in another type's source

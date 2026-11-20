@@ -47,7 +47,7 @@ exceptions:
   across the board overrides it with `SUWGATE_QUICK_LIMIT=<seconds>`.
 - `exceptions` let one target through one guard, always with a `reason`; `suwgate check` counts them in its report, and an
   exception that no longer matches anything fails the gate until it is deleted. Two optional fields, for the repository guards
-  (the .NET packages match by target only):
+  and the .NET guards alike:
     - `message` narrows it to the target's findings whose message contains that text, so a second finding in the same file still
       fails: `{ guard: no-raw-colors, target: Myapp.Web/src/mail.tsx, message: "#1e66f5", reason: … }`.
     - `once: true` makes it a one-time exception, for a finding that goes away once the change is on master, such as an
@@ -257,15 +257,16 @@ the solution, `layers.json`, the sources and the migrations itself, and takes fr
 - `test-timing` (`dotnet`, `web`, `library`): no test measures, sleeps on, waits for or limits real time, because a test that
   waits on the clock flakes on a slow machine and a speed promise, in milliseconds or in steps counted instead of them, does not
   belong on the gate. It reads the `.cs` files of the `*.Tests` and `*.Testing` projects (`Stopwatch`, `GetTimestamp`,
-  `GetElapsedTime`, `TickCount`, `DateTime.Now`, `UtcNow` and `Today`, `Thread.Sleep`, `Task.Delay`, `Timeout =` in an attribute),
+  `GetElapsedTime`, `TickCount`, `DateTime.Now`, `UtcNow` and `Today`, `TimeProvider.System`, `Thread.Sleep`, `Task.Delay`, `Timeout =` in an attribute,
+  a `TimeSpan.From…` or `new TimeSpan(…)` handed to a constructor that gets no `TimeProvider`),
   and the `*.test`, `*.spec`, `*.e2e`, `*.visual`
   and `*.stories` files and the helpers of an `e2e/` folder (`performance.now`, `Date.now()` in a subtraction, `setTimeout`,
   `sleep(<n>)`, `waitForTimeout`, `interruptAfterTimeLimit`, and `timeout: <n>` in a Vitest file, such as the options of `it`, `test`
   or `describe`). It lets through a call that is
-  handed a `TimeProvider` (a `FakeTimeProvider` in the tests), `Task.Delay` inside a `while`, `for`, `foreach` or `do` loop (a poll)
+  handed a `TimeProvider` (a `FakeTimeProvider` in the tests; `TimeProvider.System` is the real clock and fails), `Task.Delay` inside a `while`, `for`, `foreach` or `do` loop (a poll)
   or with `Timeout.Infinite`, the timers and the clock of a file that calls `vi.useFakeTimers()`, Playwright's auto-waiting
   `expect` with its own `timeout`, a ceiling against a hang (`CancelAfter`, `new CancellationTokenSource(<delay>)`,
-  `WaitAsync(<TimeSpan>)`, and the `timeout` option of a Vitest wait for an event: `vi.waitFor`, `vi.waitUntil`, `expect.poll`,
+  `WaitAsync(<TimeSpan>)`, an `HttpClient`'s `Timeout`, and the `timeout` option of a Vitest wait for an event: `vi.waitFor`, `vi.waitUntil`, `expect.poll`,
   Testing Library's `waitFor`, `findBy*` and `findAllBy*`; the test waits for the event and fails fast, with its name, if it never
   comes: a ceiling, not a speed promise), and the tools' configs
   (`playwright.config.ts`), whose ceilings stop a hang.
