@@ -12,6 +12,9 @@
     "bin": {
         "suwgate": "dist/cli.js"
     },
+    "exports": {
+        "./eslint": "./dist/eslint/index.js"
+    },
     "files": [
         "dist",
         "schema"
@@ -29,6 +32,30 @@
     "dependencies": {
         "ajv": "8.20.0",
         "yaml": "2.9.1"
+    },
+    "peerDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.15.0",
+        "eslint-import-resolver-typescript": "^4.4.5",
+        "eslint-plugin-boundaries": "^7.4.4",
+        "typescript-eslint": "^8.73.0"
+    },
+    "peerDependenciesMeta": {
+        "@eslint/js": {
+            "optional": true
+        },
+        "eslint": {
+            "optional": true
+        },
+        "eslint-import-resolver-typescript": {
+            "optional": true
+        },
+        "eslint-plugin-boundaries": {
+            "optional": true
+        },
+        "typescript-eslint": {
+            "optional": true
+        }
     },
     "devDependencies": {
         "@changesets/cli": "3.0.3",
