@@ -22,7 +22,25 @@ variables", "GitHub Actions billing".
   line per change. It refuses a repository that is not private: a self-hosted runner must never run a public repository's
   pull requests.
 - A job that starts while `CI_RUNNER` is set waits for the repository's runner with the label `suw-local`; it runs only while
-  the machine is on.
+  the machine is awake, and a suspend in the middle of a job loses it (rerun it).
+
+## Where it stands
+
+`just ci-runner-status` (`runner-switch.sh status`) changes nothing and prints one screen: this month's private Actions minutes
+against the included ones and whether the switch point is reached; for each repository of
+`~/.config/suw-ci-runner-switch.env`, its `CI_RUNNER` and whether its CI runs locally or on GitHub, the state of its user service
+`actions-runner@<repository>` and its runner as GitHub sees it (online or offline, idle or running a job); and the switch timer's
+last result and next run.
+
+```text
+private Actions minutes of owner in 2026-11: 2000 of 2000 included (switch point 1980 reached: CI on the local runners)
+
+repository           CI_RUNNER   runs-on  service                                    runner on GitHub
+app1                 suw-local   local    actions-runner@app1 active/running         host-app1 online, idle
+app2                 suw-local   local    actions-runner@app2 active/running         host-app2 online, running a job
+
+switch timer suw-ci-runner-switch.timer (active/waiting): last run Fri 2026-11-20 17:25:59 CET (success, exit 0), next run Fri 2026-11-20 17:30:00 CET
+```
 
 ## What runs on the machine
 
@@ -81,13 +99,14 @@ Only the owner can push to these repositories. Do not add a runner to a reposito
 3. The switch:
 
     ```sh
-    echo "REPOSITORIES=<name>,<name>" > ~/.config/suw-ci-runner-switch.env
+    printf 'REPOSITORIES=<name>,<name>\nOPTIONS=\n' > ~/.config/suw-ci-runner-switch.env
     install -m644 suw-ci-runner-switch.service suw-ci-runner-switch.timer ~/.config/systemd/user/
     systemctl --user daemon-reload && systemctl --user enable --now suw-ci-runner-switch.timer
     ```
 
-    `OPTIONS=--included 3000` in the same file passes more options; `just ci-runner-switch --repositories <name>,<name>` runs it
-    by hand, `journalctl --user -u suw-ci-runner-switch` shows what it changed.
+    `OPTIONS=--included 3000` in the same file passes more options; `just ci-runner-switch` runs it by hand (with the
+    repositories of that file unless `--repositories` names others), `journalctl --user -u suw-ci-runner-switch` shows what it
+    changed.
 
 4. In each repository's workflows, every job gets `runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}`, and every call of
    suwgate's workflows gets the same expression as the input `runs-on` under `with:`.

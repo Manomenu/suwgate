@@ -43,6 +43,12 @@ fmt:
 ci-runner-switch *args:
     ci/self-hosted/runner-switch.sh "$@"
 
+# Where the self-hosted fallback stands: private Actions minutes used, CI_RUNNER per repository, the runners' services and jobs, the switch timer
+[group('ci')]
+[positional-arguments]
+ci-runner-status *args:
+    ci/self-hosted/runner-switch.sh status "$@"
+
 # Install packages and tools from the lockfiles, and enable the git hooks
 [group('maintenance')]
 sync:
