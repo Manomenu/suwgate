@@ -4,7 +4,7 @@
 
 One line per top-level folder (at most 300 characters each).
 
-- `src/` — the CLI: `cli.ts` (the commands, and the one place that wires the gate to the guards and the steps), `gate/` (the gate itself), `guards/` (repository guards, one folder per work package), `profiles/` (the steps of each profile), `session/` (the Claude Code hooks).
+- `src/` — the CLI: `cli.ts` (the commands, and the one place that wires the gate to the guards and the steps), `gate/` (the gate itself), `guards/` (repository guards, one folder per work package), `profiles/` (the steps of each profile), `session/` (the Claude Code hooks), `dev/` (`suwgate dev`, the local stack: [dev.md](dev.md)).
 - `schema/` — `suwgate.schema.json`, the JSON Schema of `suwgate.yml`; shipped in the npm package, read by the CLI and by VS Code (`yaml.schemas`).
 - `dotnet/` — the .NET guards: `Suwgate.Architecture` (with the contract in `Verification/`), `Suwgate.Database`, and `Suwgate.Tests` (xUnit v3, one folder per package).
 - `docs/` — for people working on suwgate: this map and the contracts, `development.md`, `inventory.md` (what is still to be moved here and by whom), decisions in `adr/`, specs in `visual/spec/` and drafts in `draft/spec/`.

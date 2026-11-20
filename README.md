@@ -52,6 +52,9 @@ public void Every_interface_has_two_implementations() =>
 
 `Guards.Verify` reads the exceptions of that guard from the nearest `suwgate.yml` above the test's output folder.
 
+`suwgate dev db|logs|smoke|server|tmux|checkout-env` runs the local stack of the template (database, logs, smoke test, server, tmux
+session, worktree databases) from a `dev` section of `suwgate.yml`: [docs/dev.md](docs/dev.md).
+
 ## Work on suwgate
 
 [AGENTS.md](AGENTS.md) holds the rules, [docs/development.md](docs/development.md) the setup, [docs/architecture.md](docs/architecture.md)
