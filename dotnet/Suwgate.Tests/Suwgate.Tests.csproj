@@ -3,7 +3,6 @@
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <RootNamespace>Suwgate.Tests</RootNamespace>
-    <DefineConstants>$(DefineConstants);XUNIT_GENERATED_DISABLE_WARNINGS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

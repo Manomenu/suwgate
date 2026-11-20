@@ -2,12 +2,21 @@
   <PropertyGroup>
     <RootNamespace>Suwgate.Architecture</RootNamespace>
     <PackageId>Suwgate.Architecture</PackageId>
-    <Description>Architecture guards for the xUnit tests of a .NET application (layers, forbidden APIs, rules for types, interfaces and names), with the exceptions of suwgate.yml.</Description>
-    <PackageTags>architecture;guards;quality-gate;xunit;suwgate</PackageTags>
+    <Description>The build defaults of a .NET repository (warnings as errors, latest-all analyzers, nullable, banned APIs, the analyzer rules) and architecture guards for its xUnit tests (layers, project references, rules for types, names and files), with the exceptions of suwgate.yml.</Description>
+    <PackageTags>architecture;guards;analyzers;quality-gate;xunit;suwgate</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="TngTech.ArchUnitNET" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Update="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="none" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="buildTransitive/**" Pack="true" PackagePath="buildTransitive/" />
+    <None Remove="$(MSBuildThisFileDirectory)../../README.md" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>

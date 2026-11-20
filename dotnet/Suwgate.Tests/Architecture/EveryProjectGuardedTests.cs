@@ -1,0 +1,53 @@
+using Suwgate.Architecture.Design;
+using Suwgate.Architecture.Sources;
+
+namespace Suwgate.Tests.Architecture;
+
+public sealed class EveryProjectGuardedTests
+{
+    private static readonly System.Reflection.Assembly Server = SampleAssembly.Compile(
+        "Sample.Guarded",
+        "namespace Sample.Guarded.Api { public static class ServerApp { public static int Port => 80; } }"
+    );
+
+    private static readonly LayersFile Layers = LayersFile.Parse(
+        "Gate/layers.json",
+        """
+        {
+          "projects": {
+            "Sample.Guarded": { "layers": ["Api"] },
+            "Sample.Guarded.Tests": { "references": ["Sample.Guarded"] },
+            "Sample.Worker": {},
+            "Sample.Flat": { "layers": [] }
+          }
+        }
+        """
+    );
+
+    [Fact]
+    public void Every_production_project_read_by_the_guards_and_layered_passes() =>
+        Assert.Empty(
+            new EveryProjectGuarded(
+                LayersFile.Parse("layers.json", """{ "projects": { "Sample.Guarded": { "layers": ["Api"] } } }"""),
+                Server
+            ).Check()
+        );
+
+    [Fact]
+    public void A_project_the_guards_never_read_or_without_layers_is_found_with_the_fix_and_test_projects_are_skipped()
+    {
+        var findings = new EveryProjectGuarded(Layers, Server).Check().ToList();
+
+        Assert.Equal(["Sample.Flat", "Sample.Worker", "Sample.Flat", "Sample.Worker"], findings.Select(f => f.Target));
+        Assert.StartsWith(
+            "the guards over types never read it: add typeof(<a type of Sample.Flat>).Assembly",
+            findings[0].Message,
+            StringComparison.Ordinal
+        );
+        Assert.StartsWith("it has no layers: give it \"layers\" in Gate/layers.json", findings[2].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_finding_can_be_excepted_and_a_stale_exception_fails() =>
+        GuardAssert.HonoursExceptions(new EveryProjectGuarded(Layers, Server));
+}
