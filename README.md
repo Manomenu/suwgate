@@ -246,6 +246,24 @@ public sealed class GuardTests
 the solution, `layers.json`, the sources and the migrations itself, and takes from the test only what it cannot find
 ([dotnet/Suwgate.Architecture/README.md](dotnet/Suwgate.Architecture/README.md) lists the inputs).
 
+### The tests and the docs for people
+
+- `test-timing` (`dotnet`, `web`, `library`): no test measures, sleeps on, waits for or limits real time, because a test that
+  waits on the clock flakes on a slow machine and a speed promise, in milliseconds or in steps counted instead of them, does not
+  belong on the gate. It reads the `.cs` files of the `*.Tests` and `*.Testing` projects (`Stopwatch`, `GetTimestamp`,
+  `GetElapsedTime`, `TickCount`, `DateTime.Now`, `UtcNow` and `Today`, `Thread.Sleep`, `Task.Delay`, `Timeout =` in an attribute,
+  `CancelAfter`, `new CancellationTokenSource(<delay>)`, `WaitAsync(<TimeSpan>)`), and the `*.test`, `*.spec`, `*.e2e`, `*.visual`
+  and `*.stories` files and the helpers of an `e2e/` folder (`performance.now`, `Date.now()` in a subtraction, `setTimeout`,
+  `sleep(<n>)`, `waitForTimeout`, `interruptAfterTimeLimit`, and `timeout: <n>` in a Vitest file). It lets through a call that is
+  handed a `TimeProvider` (a `FakeTimeProvider` in the tests), `Task.Delay` inside a `while`, `for`, `foreach` or `do` loop (a poll)
+  or with `Timeout.Infinite`, the timers and the clock of a file that calls `vi.useFakeTimers()`, Playwright's auto-waiting
+  `expect` with its own `timeout`, and the tools' configs (`playwright.config.ts`), whose ceilings stop a hang.
+- `human-docs` (every profile): `README.md`, `docs/development.md` and the README of a profile's directory never tell a person to
+  run a script meant for agents, one in `scripts/.internal/` or `<name>.Gate/scripts/`; people run `just` recipes. A command is a
+  line of a shell code block or an inline code span with a space in it, and a span in parentheses or right after "runs", "calls",
+  "starts", "through" or "via" explains what runs the script, so it passes. The message names the recipe that calls the script, or
+  asks for one.
+
 ### What the gate proves ran
 
 A check counts only when the tool shows it ran, not because a file or a line of text is there:

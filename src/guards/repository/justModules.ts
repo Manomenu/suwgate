@@ -10,7 +10,7 @@ interface Mod {
     path?: string;
 }
 
-function moduleName(file: string): string {
+export function moduleName(file: string): string {
     return file.endsWith("/mod.just") ? (file.split("/")[0] ?? "") : baseName(file).replace(/\.just$/, "");
 }
 
