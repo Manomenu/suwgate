@@ -27,7 +27,7 @@ export const REQUIRED_BY_PROFILE: Readonly<Record<Profile, Purposes>> = {
         "pnpm-workspace.yaml": "pnpm's settings, such as the minimum age of a new release",
         "tsconfig.json": "the strict TypeScript options the typecheck step uses",
         "eslint.config.js": "the lint rules, including no comments and the feature boundaries",
-        ".prettierrc.json": "the formatting the format step checks",
+        ".prettierrc.json": "the formatting the format step checks (prettier.config.js instead, when a plugin needs the preset spread)",
         "knip.config.ts": "knip's config, one line that extends @maniumek/suwgate/knip, so dead code is found",
     },
     library: {
@@ -48,6 +48,16 @@ export const REQUIRED_BY_PROFILE: Readonly<Record<Profile, Purposes>> = {
         "compose.yaml": "the local PostgreSQL the server and its tests run against",
     },
 };
+
+const ALTERNATIVES: Readonly<Record<string, readonly string[]>> = {
+    ".prettierrc.json": ["prettier.config.js"],
+};
+
+function isPresent(file: string, present: ReadonlySet<string>): boolean {
+    const directory = file.slice(0, file.lastIndexOf("/") + 1);
+    const name = file.slice(directory.length);
+    return [name, ...(ALTERNATIVES[name] ?? [])].some((candidate) => present.has(directory + candidate));
+}
 
 interface Settings {
     files?: string[];
@@ -77,7 +87,7 @@ export const requiredFiles: Guard = {
     check(context) {
         const present = new Set(context.files);
         return [...required(context, (context.settings ?? {}) as Settings)]
-            .filter(([file]) => !present.has(file))
+            .filter(([file]) => !isPresent(file, present))
             .map(([file, purpose]) => ({
                 target: file,
                 message: `missing: ${purpose}, or add an exception with the reason it does not apply`,
