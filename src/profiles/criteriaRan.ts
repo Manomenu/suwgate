@@ -4,6 +4,7 @@ import path from "node:path";
 
 import type { Step, StepContext } from "../gate/contract.ts";
 import { CRITERIA_FILE, criteriaConfig } from "./criteria.ts";
+import { excludedTraits } from "./dotnet.ts";
 import { readRun, type ReportFormat, type TestRun } from "./reports.ts";
 import { quoted, read, tracked, verdictCommand } from "./shell.ts";
 
@@ -13,6 +14,7 @@ interface TestSource {
     report: string;
     patterns: string[];
     skipped?: string;
+    excludeTraits?: string[];
 }
 
 export interface CriteriaRanInput {
@@ -45,6 +47,45 @@ export function criterionIds(spec: string): string[] {
 export function names(text: string, id: string, format: ReportFormat): boolean {
     if (format === "xunit") return new RegExp(`Trait\\(\\s*"criterion"\\s*,\\s*"${id.replace(/[.]/g, "\\.")}"\\s*\\)`).test(text);
     return ['"', "'", "`"].some((quote) => text.includes(`${quote}${id}:`));
+}
+
+const ATTRIBUTE = /^\s*\[/;
+
+const TYPE = /\b(class|record|struct)\s+\w+/;
+
+function attributesAround(lines: readonly string[], index: number): string {
+    let first = index;
+    while (first > 0 && ATTRIBUTE.test(lines[first - 1] ?? "")) first--;
+    let last = index;
+    while (last + 1 < lines.length && ATTRIBUTE.test(lines[last + 1] ?? "")) last++;
+    return lines.slice(first, last + 1).join("\n");
+}
+
+function escaped(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasTrait(attributes: string, trait: string): boolean {
+    const [name = "", value = ""] = trait.split("=");
+    return new RegExp(`Trait\\(\\s*"${escaped(name)}"\\s*,\\s*"${escaped(value)}"\\s*\\)`).test(attributes);
+}
+
+function typeAttributes(lines: readonly string[], index: number): string {
+    const typeLine = lines.slice(0, index).findLastIndex((line) => TYPE.test(line));
+    return typeLine > 0 && ATTRIBUTE.test(lines[typeLine - 1] ?? "") ? attributesAround(lines, typeLine - 1) : "";
+}
+
+function outsideTheGate(text: string, id: string, traits: readonly string[]): boolean {
+    if (traits.length === 0) return false;
+    const lines = text.split("\n");
+    const naming = lines.flatMap((line, index) => (names(line, id, "xunit") ? [index] : []));
+    return (
+        naming.length > 0 &&
+        naming.every((index) => {
+            const attributes = `${attributesAround(lines, index)}\n${typeAttributes(lines, index)}`;
+            return traits.some((trait) => hasTrait(attributes, trait));
+        })
+    );
 }
 
 function proven(passed: readonly string[], id: string): boolean {
@@ -84,10 +125,18 @@ export function criteriaRan(input: CriteriaRanInput): string[] {
     }));
     return ids.flatMap((id) => {
         const naming = texts.flatMap(({ source, files }) =>
-            files.filter((file) => names(file.text, id, source.format)).map((file) => ({ source, file: file.file })),
+            files
+                .filter((file) => names(file.text, id, source.format))
+                .map((file) => ({ source, file: file.file, outside: outsideTheGate(file.text, id, source.excludeTraits ?? []) })),
         );
         const checked = naming.filter((entry) => entry.source.skipped === undefined);
         if (checked.length === 0) return [];
+        if (checked.every((entry) => entry.outside)) {
+            const traits = [...new Set(checked.flatMap((entry) => entry.source.excludeTraits ?? []))].join(", ");
+            return [
+                `${id}: named only by tests outside the gate (${traits}, excludeTraits of dotnet-test in suwgate.yml): ${checked.map((entry) => entry.file).join(", ")}. The gate never runs them, so nothing in it proves the criterion: add a test the gate runs that names it, with a stand-in for the outside service (a fake model or server), and keep the outside test for the real one`,
+            ];
+        }
         if (checked.some((entry) => proven(runs.get(entry.source.step)?.passed ?? [], id))) return [];
         const unreported = [...new Set(checked.filter((entry) => runs.get(entry.source.step) === null).map((entry) => entry.source.step))];
         const why = unreported.length > 0 ? `${unreported.join(", ")} wrote no report` : "skipped, filtered out, or failed";
@@ -120,6 +169,7 @@ export function criteriaRanInput(context: StepContext): Omit<CriteriaRanInput, "
                 report: path.posix.join(reported.step, REPORT_FILE[reported.format]),
                 patterns: kind.paths,
                 ...(context.skippedSteps.includes(reported.step) ? { skipped: "skipped in suwgate.yml" } : {}),
+                ...(reported.format === "xunit" && excludedTraits(context).length > 0 ? { excludeTraits: excludedTraits(context) } : {}),
             },
         ];
     });

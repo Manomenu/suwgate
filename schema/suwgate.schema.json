@@ -35,6 +35,11 @@
                 }
             }
         },
+        "env": { "$ref": "#/$defs/env", "description": "Variables set for every step (a step's own env in steps.configure wins)." },
+        "unset": {
+            "$ref": "#/$defs/unset",
+            "description": "Variables no step sees, removed before the steps run, e.g. [Models__*, LLM_MODEL_*] so no step reaches a real model."
+        },
         "steps": {
             "type": "object",
             "additionalProperties": false,
@@ -73,6 +78,29 @@
                             "reason": { "$ref": "#/$defs/reason" }
                         }
                     }
+                },
+                "configure": {
+                    "description": "Knobs of the profiles' own steps, by step id: their ceiling, more steps to wait for, their environment, and the step's own settings, which the step's schema checks. Replacing a step's command is a skip with its reason plus an added step.",
+                    "type": "object",
+                    "propertyNames": { "$ref": "#/$defs/id" },
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "limitSeconds": { "type": "integer", "minimum": 1, "description": "The step is killed above this." },
+                            "after": {
+                                "type": "array",
+                                "uniqueItems": true,
+                                "items": { "$ref": "#/$defs/id" },
+                                "description": "More steps that must finish first, on top of the step's own."
+                            },
+                            "env": { "$ref": "#/$defs/env" },
+                            "unset": { "$ref": "#/$defs/unset" },
+                            "settings": {
+                                "description": "The step's own settings, checked by the step's settingsSchema (README: the settings of the steps)."
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -105,7 +133,16 @@
                 "properties": {
                     "guard": { "type": "string", "pattern": "^([a-z]+/)?[a-z][a-z0-9-]*$" },
                     "target": { "type": "string", "minLength": 1 },
-                    "reason": { "$ref": "#/$defs/reason" }
+                    "reason": { "$ref": "#/$defs/reason" },
+                    "message": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Narrows the exception to the target's findings whose message contains this text; without it, every finding of the target is excepted. Repository guards only."
+                    },
+                    "once": {
+                        "type": "boolean",
+                        "description": "A one-time exception: it holds only while master's suwgate.yml does not have it yet (on the branch that adds it). After the merge it excepts nothing and is never stale; the report asks to delete it. Repository guards only."
+                    }
                 }
             }
         },
@@ -158,7 +195,7 @@
                     }
                 },
                 "database": {
-                    "description": "Defaults to the app name for all three.",
+                    "description": "The app's database: user, password and name default to the app name; up and psql replace the compose service with the repository's own commands.",
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
@@ -168,7 +205,17 @@
                             "minLength": 1,
                             "description": "A development password: the database is published on the loopback only."
                         },
-                        "name": { "type": "string", "minLength": 1 }
+                        "name": { "type": "string", "minLength": 1 },
+                        "up": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A bash command, run in the repository root, that starts the database (or leaves it running) and returns once it answers, e.g. scripts/.internal/db.sh up. suwgate dev db up, the database-up step and the e2e step run it instead of docker compose."
+                        },
+                        "psql": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "A bash command that runs psql in the database as its owner and takes psql's arguments after it, e.g. scripts/.internal/db.sh psql. suwgate dev db psql and the e2e step use it instead of docker compose exec."
+                        }
                     }
                 },
                 "server": {
@@ -221,6 +268,18 @@
     "$defs": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "reason": { "type": "string", "pattern": "\\S", "description": "Why: a sentence a reviewer can judge." },
+        "env": {
+            "description": "Variables set for the commands, by name; quote a value YAML would read as a number or a boolean (\"1\").",
+            "type": "object",
+            "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+            "additionalProperties": { "type": "string" }
+        },
+        "unset": {
+            "description": "Variables removed from the environment, by name; * and ? match any characters (Models__* clears every Models__ setting), without regard to case, as .NET reads configuration.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Za-z0-9_*?]+$" }
+        },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "relativePath": { "type": "string", "pattern": "^[^/\\\\][^\\\\]*$" }
     }

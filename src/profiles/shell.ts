@@ -80,13 +80,31 @@ export function suwgate(args: string): string {
     return `${quoted(process.execPath)} ${quoted(CLI)} ${args}`;
 }
 
-export function hasDevSection(context: StepContext): boolean {
+const MAX_ALIASES = 10_000;
+
+function devSection(context: StepContext): Record<string, unknown> | null {
     try {
-        const parsed: unknown = parseYaml(readFileSync(path.join(context.root, "suwgate.yml"), "utf8"));
-        return typeof parsed === "object" && parsed !== null && "dev" in parsed;
+        const parsed: unknown = parseYaml(readFileSync(path.join(context.root, "suwgate.yml"), "utf8"), { maxAliasCount: MAX_ALIASES });
+        if (typeof parsed !== "object" || parsed === null || !("dev" in parsed)) return null;
+        const dev = parsed.dev;
+        return typeof dev === "object" && dev !== null ? (dev as Record<string, unknown>) : {};
     } catch {
-        return false;
+        return null;
     }
+}
+
+export function hasDevSection(context: StepContext): boolean {
+    return devSection(context) !== null;
+}
+
+export function databaseUpCommand(context: StepContext): string | null {
+    const database = devSection(context)?.["database"];
+    const up = typeof database === "object" && database !== null ? (database as Record<string, unknown>)["up"] : undefined;
+    return typeof up === "string" ? up : null;
+}
+
+export function settingsOf<Settings>(context: StepContext, step: string): Partial<Settings> {
+    return context.settings[step] ?? {};
 }
 
 export const CHECKOUT_ENV = [`variables="$(${suwgate("dev checkout-env")})"`, 'eval "$variables"'];
@@ -102,15 +120,15 @@ export function verdictCommand(args: string): string {
 export function countedVitest(step: string, command: string): string {
     return [
         runDirectory(step),
-        `${command} --reporter=default --reporter=json --outputFile.json="$run/vitest.json"`,
+        `${command} --reporter=default --reporter=json --outputFile.json="$run/vitest.json" "$@"`,
         verdictCommand(`tests vitest "$run/vitest.json" ${quoted(`vitest (${step})`)}`),
     ].join(" && ");
 }
 
-export function countedPlaywright(step: string, command: string): string[] {
+export function countedPlaywright(step: string, command: string, reporters: string | null = "list,json"): string[] {
     return [
         runDirectory(step),
-        `PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" ${command} --reporter=list,json`,
+        `PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" ${command}${reporters === null ? "" : ` --reporter=${reporters}`} "$@"`,
         verdictCommand(`tests playwright "$run/playwright.json" ${quoted(`playwright (${step})`)}`),
     ];
 }

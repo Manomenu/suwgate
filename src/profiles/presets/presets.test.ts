@@ -60,18 +60,30 @@ describe("the Prettier preset", () => {
 describe("the knip preset", () => {
     it("ignores the tools the steps run, the generated types and finds the Playwright configs, only those the app has", () => {
         const app = folder({
-            "package.json": JSON.stringify({ devDependencies: { "openapi-typescript": "7", vite: "8" } }),
+            "package.json": JSON.stringify({ devDependencies: { "openapi-typescript": "7", prettier: "3", vite: "8" } }),
             "src/api/openapi.d.ts": "",
             "e2e/playwright.config.ts": "",
         });
 
         expect(knip({ ignoreDependencies: ["tailwindcss"], entry: ["src/main.tsx"] }, app)).toEqual({
             entry: ["src/main.tsx"],
-            ignore: ["src/api/openapi.d.ts"],
-            ignoreDependencies: ["openapi-typescript", "tailwindcss"],
+            ignore: [],
+            ignoreIssues: {
+                "src/api/openapi.d.ts": [
+                    "files",
+                    "exports",
+                    "nsExports",
+                    "types",
+                    "nsTypes",
+                    "enumMembers",
+                    "namespaceMembers",
+                    "duplicates",
+                ],
+            },
+            ignoreDependencies: ["prettier", "openapi-typescript", "tailwindcss"],
             playwright: { config: ["e2e/playwright.config.ts"] },
         });
-        expect(knip({}, folder({}))).toEqual({ ignore: [], ignoreDependencies: [] });
+        expect(knip({}, folder({}))).toEqual({ ignore: [], ignoreIssues: {}, ignoreDependencies: [] });
     });
 });
 
@@ -102,6 +114,23 @@ describe("the Playwright presets", () => {
             screenshot: "only-on-failure",
             baseURL: "http://127.0.0.1:3301",
         });
+    });
+
+    it("keep the app's reporters and add the JSON report the e2e step reads only when the step asks for it", () => {
+        const html = [["list"], ["html", { open: "never" }]] as const;
+        const previous = process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"];
+        delete process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"];
+        try {
+            expect(e2eTests({}).reporter).toEqual([["list"]]);
+            expect(e2eTests({ reporter: html }).reporter).toEqual(html);
+            process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = "/run/e2e/playwright.json";
+            expect(e2eTests({}).reporter).toEqual([["list"], ["json"]]);
+            expect(e2eTests({ reporter: html }).reporter).toEqual([...html, ["json"]]);
+            expect(e2eTests({ reporter: "dot,json" }).reporter).toEqual([["dot"], ["json"]]);
+        } finally {
+            if (previous === undefined) delete process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"];
+            else process.env["PLAYWRIGHT_JSON_OUTPUT_FILE"] = previous;
+        }
     });
 
     it("compare every story at two screen sizes against the built Storybook", () => {

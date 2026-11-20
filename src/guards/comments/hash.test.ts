@@ -41,6 +41,16 @@ describe("comments-hash", () => {
         ["justfile", "# hidden\n[private]\ndefault:\n    @just --list", 1],
         ["justfile", "fmt:\n    # format it\n    x", 2],
         ["tmux-dev.just", '# `just tmux-dev <recipe>`\n\nset shell := ["bash"]', 1],
+        ["justfile", '# Logs of one service\nlogs service="":\n    docker compose logs {{ service }}', 0],
+        ["justfile", "# Build it\nbuild target='x' *args:\n    x", 0],
+        ["justfile", '# A setting\nport := "8080"', 1],
+        ["justfile", "# The database\nmod db '.just/db.just'", 0],
+        ["justfile", '# The tools\nmod? tools "tools"', 0],
+        ["seed/changes.yaml", "articles:\n  - body: |\n      ## Flats\n      # Houses\n    title: x", 0],
+        ["seed/changes.yaml", "body: >-\n  # not a comment\n\n  ## nor this\nnext: 1 # but this is", 5],
+        ["seed/changes.yaml", "body: |2 # the indent\n   # text\n# a comment", 1],
+        ["seed/changes.yaml", "- |\n  # text\n- x\n# a comment", 4],
+        ["seed/changes.yaml", "- key: |\n    # text\n  other: 1 # a comment", 3],
     ] as const)("finds the first comment of %s on line %d (0: none) (%#)", (file, text, line) => {
         expect(firstLine(file, text)).toBe(line);
     });

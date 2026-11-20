@@ -13,6 +13,26 @@ describe("just-modules", () => {
         expect(shown(await findingsOf(justModules, { justfile: "", [file]: "" }))).toEqual([file]);
     });
 
+    it("passes a module the mod line names by its path, a file or a folder", async () => {
+        const files = {
+            justfile: "mod db '.just/db.just'\nmod? langfuse \"tools/langfuse/\"\n",
+            ".just/db.just": "",
+            "tools/langfuse/justfile": "",
+        };
+        expect(await findingsOf(justModules, files)).toEqual([]);
+    });
+
+    it("finds a mod line whose path names no module", async () => {
+        const findings = await findingsOf(justModules, { justfile: "mod db '.just/db.just'\n" });
+
+        expect(findings).toEqual([
+            {
+                target: "justfile",
+                message: "mod db names .just/db.just, which is not a module file here: fix the path, or delete the mod line",
+            },
+        ]);
+    });
+
     it("finds a mod line without its module and a module without its mod line", async () => {
         const findings = await findingsOf(justModules, { justfile: "mod db\n", "web.just": "" });
 

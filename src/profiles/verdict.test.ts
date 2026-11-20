@@ -33,7 +33,7 @@ const [FIRST, SECOND, THIRD] = [1, 2, 3].map((number) => ["AC", "x", String(numb
 const PRESET = { strict: true, noUncheckedIndexedAccess: true, exactOptionalPropertyTypes: true, noEmit: true, skipLibCheck: true };
 
 function stepContext(root: string, skippedGuards: string[] = [], profiles: StepContext["profiles"] = ["dotnet"]): StepContext {
-    return { root, cwd: root, quick: false, profiles, directories: {}, skippedSteps: [], skippedGuards, changed: () => [] };
+    return { root, cwd: root, quick: false, profiles, directories: {}, skippedSteps: [], skippedGuards, settings: {}, changed: () => [] };
 }
 
 const FAKE_DOTNET = `#!/usr/bin/env bash

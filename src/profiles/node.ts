@@ -85,6 +85,7 @@ export function nodeSteps(profile: Profile): Step[] {
             needs: ["pnpm"],
             after,
             run: unitTests,
+            args: "vitest run",
             limitSeconds: 300,
         },
         {

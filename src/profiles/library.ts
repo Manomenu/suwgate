@@ -58,7 +58,7 @@ export function visual(context: StepContext): string | null {
     return [
         "pnpm exec storybook build --quiet -o storybook-static >/dev/null",
         runDirectory("visual"),
-        `docker run --rm --init --ipc=host --security-opt label=disable -v "$PWD:/work" -v "$run:/suwgate-run" -w /work -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/suwgate-run/playwright.json mcr.microsoft.com/playwright:v${version}-noble node_modules/.bin/playwright test -c ${VISUAL_CONFIG} --reporter=line,json`,
+        `docker run --rm --init --ipc=host --security-opt label=disable -v "$PWD:/work" -v "$run:/suwgate-run" -w /work -e CI -e PLAYWRIGHT_JSON_OUTPUT_FILE=/suwgate-run/playwright.json mcr.microsoft.com/playwright:v${version}-noble node_modules/.bin/playwright test -c ${VISUAL_CONFIG} --reporter=line,json "$@"`,
         verdictCommand(`tests playwright "$run/playwright.json" ${quoted("playwright (visual)")}`),
     ].join(" && ");
 }
@@ -101,6 +101,7 @@ export const librarySteps: readonly Step[] = [
         needs: ["pnpm"],
         after,
         run: stories,
+        args: "vitest run --project stories",
         limitSeconds: 600,
     },
     {
@@ -128,6 +129,7 @@ export const librarySteps: readonly Step[] = [
         needs: ["pnpm", "node"],
         after: ["attw"],
         run: consumerApp,
+        args: "playwright test",
         limitSeconds: 900,
     },
     {
@@ -137,6 +139,7 @@ export const librarySteps: readonly Step[] = [
         needs: ["pnpm", "docker"],
         after,
         run: visual,
+        args: "playwright test, in the Playwright image",
         limitSeconds: 900,
     },
     {

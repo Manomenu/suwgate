@@ -90,3 +90,46 @@ describe("dev db: running", () => {
         expect(calls).toHaveLength(1);
     });
 });
+
+describe("dev db: a database of the repository's own commands", () => {
+    const settings = settingsOf({
+        name: "suwchatbot",
+        database: { up: "scripts/.internal/db.sh up", psql: "scripts/.internal/db.sh psql" },
+    });
+    const environment = (exec: ReturnType<typeof fakeExec>["exec"], io: ReturnType<typeof recordingIo>["io"]) => ({
+        settings,
+        exec,
+        io,
+        interactive: false,
+        ask: () => Promise.resolve(""),
+    });
+
+    it("runs dev.database.up in the repository root instead of compose, its output on stderr, then prints the address", async () => {
+        const { exec, calls } = fakeExec();
+        const { io, out } = recordingIo();
+
+        expect(await runDb({ kind: "up" }, environment(exec, io))).toBe(0);
+        expect(calls[0]).toEqual({ argv: ["bash", "-c", "{ scripts/.internal/db.sh up\n} >&2"], options: { cwd: "/repo" } });
+        expect(out).toEqual(["postgresql://suwchatbot:suwchatbot@localhost:5533/suwchatbot"]);
+    });
+
+    it("hands psql's arguments to dev.database.psql", async () => {
+        const { exec, calls } = fakeExec();
+        const { io } = recordingIo();
+
+        await runDb({ kind: "psql", args: ["-d", "postgres", "-c", "select 1"] }, environment(exec, io));
+
+        expect(calls[0]?.argv).toEqual(["bash", "-c", 'scripts/.internal/db.sh psql "$@"', "suwgate", "-d", "postgres", "-c", "select 1"]);
+    });
+
+    it("names the failed command, and refuses the commands that are the repository's own", async () => {
+        const { io } = recordingIo();
+
+        await expect(runDb({ kind: "up" }, environment(fakeExec(() => ({ status: 1 })).exec, io))).rejects.toThrow(
+            "the database did not start: scripts/.internal/db.sh up failed (exit 1)",
+        );
+        await expect(runDb({ kind: "down" }, environment(fakeExec().exec, io))).rejects.toThrow(
+            "this repository runs its database with its own commands, dev.database.up (scripts/.internal/db.sh up) and dev.database.psql (scripts/.internal/db.sh psql) in suwgate.yml, so down is the repository's own too",
+        );
+    });
+});

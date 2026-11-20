@@ -40,3 +40,11 @@ export function changedFiles(root: string): string[] {
     const untracked = git(root, ["ls-files", "--others", "--exclude-standard"]);
     return [...new Set([...lines(committedOrStaged), ...lines(untracked)])].sort();
 }
+
+export function fileOnMaster(root: string, file: string): string | null {
+    for (const branch of ["master", "origin/master"]) {
+        const base = git(root, ["merge-base", "HEAD", branch])?.trim();
+        if (base !== undefined && base.length > 0) return git(root, ["show", `${base}:${file}`]);
+    }
+    return null;
+}

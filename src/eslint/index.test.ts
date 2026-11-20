@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { ESLint } from "eslint";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { app, strict } from "./index.ts";
 
@@ -67,6 +67,21 @@ afterAll(() => {
 });
 
 describe("the app preset", () => {
+    it("resolves the imports of src/ with the first project only, so the resolver never warns about several", async () => {
+        writeFileSync(path.join(root, "tsconfig.node.json"), JSON.stringify({ compilerOptions: { strict: true }, include: ["*.ts"] }));
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const config = app({ root, projects: ["./tsconfig.json", "./tsconfig.node.json"], features: ["notes", "auth"], shared: ["api"] });
+        const resolver = config.flatMap((entry) =>
+            entry.settings?.["import/resolver"] === undefined ? [] : [entry.settings["import/resolver"]],
+        );
+
+        await new ESLint({ cwd: root, overrideConfigFile: true, overrideConfig: config }).lintFiles(["src/main.ts"]);
+
+        expect(resolver).toEqual([expect.objectContaining({ typescript: { project: path.join(root, "tsconfig.json") } })]);
+        expect(warn.mock.calls.flat().join("\n")).not.toContain("Multiple projects");
+        warn.mockRestore();
+    }, 60_000);
+
     it("lets an entry file import features and shared folders, a feature itself and the shared folders", () => {
         expect(violations.get("src/main.ts")).toEqual([]);
         expect(violations.get("src/notes/client.ts")).toEqual([]);

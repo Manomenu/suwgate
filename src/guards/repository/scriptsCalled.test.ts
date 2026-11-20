@@ -25,8 +25,26 @@ describe("scripts-called", () => {
         ["Myapp.Web/package.json", '{"scripts": {"db": "../scripts/db.sh"}}'],
         ["suwgate.yml", "steps:\n  add:\n    - name: db\n      run: scripts/db.sh\n"],
         ["compose.yaml", "entrypoint: /app/db.sh\n"],
+        ["suwgate.yml", "steps:\n  configure:\n    e2e:\n      settings:\n        before: [scripts/db.sh seed]\n"],
+        ["suwgate.yml", "dev:\n  name: app\n  database:\n    up: scripts/db.sh up\n"],
+        ["claude-plugin/hooks/hooks.json", '{"hooks": {"SessionStart": [{"hooks": [{"command": "sh scripts/db.sh"}]}]}}'],
     ])("lets a script through that %s calls", async (caller, text) => {
         expect(shown(await findingsOf(scriptsCalled, { "scripts/db.sh": "", [caller]: text }))).not.toContain("scripts/db.sh");
+    });
+
+    it("does not count a script that suwgate.yml names only in an exception or a reason", async () => {
+        const config = [
+            "steps:",
+            "  skip:",
+            "    - step: e2e",
+            "      reason: scripts/db.sh prepares it",
+            "exceptions:",
+            "  - guard: scripts-called",
+            "    target: scripts/db.sh",
+            "    reason: called by hand",
+        ].join("\n");
+
+        expect(shown(await findingsOf(scriptsCalled, { "scripts/db.sh": "", "suwgate.yml": config }))).toEqual(["scripts/db.sh"]);
     });
 
     it("finds a script nothing calls, also one that only names itself", async () => {

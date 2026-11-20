@@ -10,6 +10,8 @@ export const CONFIG_FILE = "suwgate.yml";
 
 const SCHEMA_FILE = new URL("../../schema/suwgate.schema.json", import.meta.url);
 
+export const MAX_ALIASES = 10_000;
+
 const DOTNET_GUARD_PREFIXES: Readonly<Record<string, Profile>> = { "architecture/": "dotnet", "database/": "database" };
 
 interface AddedStep {
@@ -31,11 +33,24 @@ interface SkippedGuard {
     reason: string;
 }
 
+export interface Environment {
+    env?: Record<string, string>;
+    unset?: string[];
+}
+
+interface ConfiguredStep extends Environment {
+    limitSeconds?: number;
+    after?: string[];
+    settings?: unknown;
+}
+
 export interface Config {
     profiles: Profile[];
     directories: Partial<Record<Profile, string>>;
     add: AddedStep[];
     skip: SkippedStep[];
+    configure: Record<string, ConfiguredStep>;
+    environment: Environment;
     skippedGuards: SkippedGuard[];
     exceptions: GuardException[];
     settings: Record<string, unknown>;
@@ -45,8 +60,10 @@ export interface Config {
 interface RawConfig {
     profiles: Profile[];
     directories?: Partial<Record<Profile, string>>;
-    steps?: { add?: AddedStep[]; skip?: SkippedStep[] };
+    steps?: { add?: AddedStep[]; skip?: SkippedStep[]; configure?: Record<string, ConfiguredStep> };
     guards?: { skip?: SkippedGuard[] };
+    env?: Environment["env"];
+    unset?: string[];
     exceptions?: GuardException[];
     settings?: Record<string, unknown>;
     quick?: { limitSeconds?: number };
@@ -137,6 +154,12 @@ function checkExceptions(raw: RawConfig, catalog: Catalog, problem: (parts: (str
                 `no guard "${exception.guard}": the guards are ${catalog.guards.map((guard) => guard.id).join(", ")} (and architecture/*, database/* of the .NET packages)`,
             );
         } else if (profiles === "dotnet-guard") {
+            if (exception.message !== undefined || exception.once !== undefined) {
+                problem(
+                    where,
+                    `"${exception.guard}" is a .NET guard, and the .NET packages match an exception by its target only: delete message and once`,
+                );
+            }
             const prefix = Object.keys(DOTNET_GUARD_PREFIXES).find((candidate) => exception.guard.startsWith(candidate)) ?? "";
             const needed = DOTNET_GUARD_PREFIXES[prefix];
             if (needed !== undefined && !raw.profiles.includes(needed)) {
@@ -151,7 +174,7 @@ function checkExceptions(raw: RawConfig, catalog: Catalog, problem: (parts: (str
                 `"${exception.guard}" runs only for ${profiles.join(", ")}, which this repository does not have: delete the exception`,
             );
         }
-        const key = `${exception.guard}\u0000${exception.target}`;
+        const key = `${exception.guard}\u0000${exception.target}\u0000${exception.message ?? ""}`;
         if (seen.has(key)) problem(where, `the same exception (${exception.guard}, ${exception.target}) is listed twice: keep one`);
         seen.add(key);
     });
@@ -178,6 +201,71 @@ function checkSteps(raw: RawConfig, catalog: Catalog, problem: (parts: (string |
             );
         }
     });
+}
+
+function checkConfigure(raw: RawConfig, catalog: Catalog, problem: (parts: (string | number)[], text: string) => void): void {
+    const steps = catalog.stepsFor(raw.profiles);
+    const known = steps.map((step) => step.id);
+    const added = (raw.steps?.add ?? []).map((step) => step.name);
+    const skipped = (raw.steps?.skip ?? []).map((entry) => entry.step);
+    for (const [id, configured] of Object.entries(raw.steps?.configure ?? {})) {
+        const where = ["steps", "configure", id];
+        const step = steps.find((candidate) => candidate.id === id);
+        if (step === undefined) {
+            problem(
+                where,
+                added.includes(id)
+                    ? `"${id}" is added in steps.add, which takes its limitSeconds and after itself; steps.configure is for the steps of the profiles`
+                    : `the profiles ${raw.profiles.join(", ")} have no step "${id}": their steps are ${known.join(", ")}`,
+            );
+            continue;
+        }
+        if (skipped.includes(id))
+            problem(where, `"${id}" is skipped in steps.skip, so this configuration is never used: delete it, or the skip`);
+        (configured.after ?? []).forEach((after, at) => {
+            if (after === id) problem([...where, "after", at], `"${id}" cannot wait for itself`);
+            else if (!known.includes(after) && !added.includes(after))
+                problem([...where, "after", at], `no step "${after}": the steps are ${[...known, ...added].join(", ")}`);
+        });
+        if (configured.settings === undefined) continue;
+        if (step.settingsSchema === undefined) {
+            problem([...where, "settings"], `the step "${id}" takes no settings`);
+            continue;
+        }
+        const validate = ajv.compile(step.settingsSchema);
+        if (!validate(configured.settings)) {
+            for (const error of relevant(validate.errors ?? [])) {
+                problem(
+                    [...where, "settings", ...segments(error.instancePath)],
+                    describe({ ...error, instancePath: `/steps/configure/${id}/settings${error.instancePath}` }),
+                );
+            }
+        }
+    }
+}
+
+function circle(raw: RawConfig, catalog: Catalog): string[] | null {
+    const waits = new Map<string, string[]>();
+    for (const step of catalog.stepsFor(raw.profiles)) {
+        waits.set(step.id, [...(step.after ?? []), ...(step.orderAfter ?? []), ...(raw.steps?.configure?.[step.id]?.after ?? [])]);
+    }
+    for (const step of raw.steps?.add ?? []) waits.set(step.name, step.after ?? []);
+    const done = new Set<string>();
+    const visit = (id: string, path: readonly string[]): string[] | null => {
+        if (path.includes(id)) return [...path.slice(path.indexOf(id)), id];
+        if (done.has(id)) return null;
+        for (const next of waits.get(id) ?? []) {
+            const found = visit(next, [...path, id]);
+            if (found !== null) return found;
+        }
+        done.add(id);
+        return null;
+    };
+    for (const id of waits.keys()) {
+        const found = visit(id, []);
+        if (found !== null) return found;
+    }
+    return null;
 }
 
 function profilesOf(id: string, catalog: Catalog): readonly Profile[] | "every" | null {
@@ -245,7 +333,12 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
             ),
         };
     }
-    const data: unknown = document.toJS();
+    let data: unknown;
+    try {
+        data = document.toJS({ maxAliasCount: MAX_ALIASES });
+    } catch (error) {
+        return { problems: [`${CONFIG_FILE}: ${error instanceof Error ? error.message : String(error)}`] };
+    }
     if (!validateFile(data)) {
         return {
             problems: relevant(validateFile.errors ?? []).map(
@@ -262,6 +355,12 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
     checkSteps(data, catalog, problem);
     checkSkippedGuards(data, catalog, problem);
     checkSettings(data, catalog, problem);
+    checkConfigure(data, catalog, problem);
+    if (problems.length === 0) {
+        const found = circle(data, catalog);
+        if (found !== null)
+            problem(["steps"], `steps wait for each other in a circle: ${found.join(" -> ")}: drop one of these after entries`);
+    }
     if (problems.length > 0) return { problems };
     return {
         config: {
@@ -269,6 +368,11 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
             directories: data.directories ?? {},
             add: data.steps?.add ?? [],
             skip: data.steps?.skip ?? [],
+            configure: data.steps?.configure ?? {},
+            environment: {
+                ...(data.env === undefined ? {} : { env: data.env }),
+                ...(data.unset === undefined ? {} : { unset: data.unset }),
+            },
             skippedGuards: data.guards?.skip ?? [],
             exceptions: data.exceptions ?? [],
             settings: data.settings ?? {},

@@ -12,6 +12,8 @@ export interface GuardException {
     guard: string;
     target: string;
     reason: string;
+    message?: string;
+    once?: boolean;
 }
 
 export interface GuardContext {
@@ -47,6 +49,7 @@ export interface StepContext {
     directories: Readonly<Partial<Record<Profile, string>>>;
     skippedSteps: readonly string[];
     skippedGuards: readonly string[];
+    settings: Readonly<Record<string, unknown>>;
     changed(): readonly string[];
 }
 
@@ -64,5 +67,8 @@ export interface Step {
     profile?: Profile;
     needs?: readonly string[];
     after?: readonly string[];
+    orderAfter?: readonly string[];
     limitSeconds?: number;
+    settingsSchema?: object;
+    args?: string;
 }

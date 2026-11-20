@@ -16,7 +16,7 @@ export interface DevSettings {
     name: string;
     ports: { server: number; web: number; e2eServer: number; e2eWeb: number; database: number; stack: number };
     compose: { file: string; profile: string; databaseService: string; serverService: string; extraServices: string[] };
-    database: { user: string; password: string; name: string };
+    database: { user: string; password: string; name: string; up: string | null; psql: string | null };
     serverProject: string | null;
     webDirectory: string | null;
     logFile: string;
@@ -35,10 +35,11 @@ export const DEFAULT_SMOKE_CHECKS: readonly SmokeCheck[] = [
 ];
 
 const NAME = /^[a-z][a-z0-9-]*$/;
+const MAX_ALIASES = 10_000;
 const ROOT_KEYS = ["name", "portOffset", "ports", "compose", "database", "server", "smoke"];
 const PORT_KEYS = Object.keys(BASE_PORTS);
 const COMPOSE_KEYS = ["file", "profile", "databaseService", "serverService", "extraServices"];
-const DATABASE_KEYS = ["user", "password", "name"];
+const DATABASE_KEYS = ["user", "password", "name", "up", "psql"];
 const SERVER_KEYS = ["project", "logFile"];
 const SMOKE_KEYS = ["checks"];
 const CHECK_KEYS = ["path", "expect", "hint"];
@@ -150,6 +151,8 @@ export function resolveSettings(raw: unknown, directories: Readonly<Record<strin
             user,
             password: text(databaseRaw, "password", "dev.database", user, problems),
             name: text(databaseRaw, "name", "dev.database", name, problems),
+            up: databaseRaw["up"] === undefined ? null : text(databaseRaw, "up", "dev.database", "", problems),
+            psql: databaseRaw["psql"] === undefined ? null : text(databaseRaw, "psql", "dev.database", "", problems),
         },
         serverProject: typeof serverRaw["project"] === "string" ? serverRaw["project"] : stringOrNull(directories["dotnet"]),
         webDirectory: stringOrNull(directories["web"]),
@@ -169,7 +172,7 @@ function stringOrNull(value: unknown): string | null {
 export function loadSettings(root: string): DevSettings {
     const file = path.join(root, "suwgate.yml");
     if (!existsSync(file)) throw new Failure(`no suwgate.yml in ${root}: suwgate dev reads its settings from the dev section there`, 2);
-    const data = (parse(readFileSync(file, "utf8")) ?? {}) as Record<string, unknown>;
+    const data = (parse(readFileSync(file, "utf8"), { maxAliasCount: MAX_ALIASES }) ?? {}) as Record<string, unknown>;
     const directories =
         typeof data["directories"] === "object" && data["directories"] !== null ? (data["directories"] as Record<string, unknown>) : {};
     return resolveSettings(data["dev"], directories, root);

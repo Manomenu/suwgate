@@ -3,12 +3,24 @@ interface Use {
     [key: string]: unknown;
 }
 
+type ReporterDescription = readonly [string] | readonly [string, unknown];
+
 interface PlaywrightConfig {
     use?: Use;
+    reporter?: string | readonly ReporterDescription[];
     [key: string]: unknown;
 }
 
 const ci = (): boolean => Boolean(process.env["CI"]);
+
+const GATE_REPORT = "PLAYWRIGHT_JSON_OUTPUT_FILE";
+
+function withGateReport(reporter: string | readonly ReporterDescription[]): ReporterDescription[] {
+    const listed: ReporterDescription[] =
+        typeof reporter === "string" ? reporter.split(",").map((name): ReporterDescription => [name.trim()]) : [...reporter];
+    const wanted = (process.env[GATE_REPORT] ?? "") !== "" && !listed.some(([name]) => name === "json");
+    return wanted ? [...listed, ["json"]] : listed;
+}
 
 export function e2eTests<Config extends PlaywrightConfig>(config: Config) {
     return {
@@ -17,10 +29,10 @@ export function e2eTests<Config extends PlaywrightConfig>(config: Config) {
         workers: 1,
         retries: ci() ? 1 : 0,
         failOnFlakyTests: ci(),
-        reporter: "list" as const,
         timeout: 60_000,
         projects: [{ name: "chromium", use: { browserName: "chromium" as const, viewport: { width: 1440, height: 900 } } }],
         ...config,
+        reporter: withGateReport(config.reporter ?? "list"),
         use: { locale: "en-US", trace: "retain-on-failure" as const, screenshot: "only-on-failure" as const, ...config.use },
     };
 }

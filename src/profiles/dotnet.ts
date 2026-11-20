@@ -1,7 +1,18 @@
 import type { Step, StepContext } from "../gate/contract.ts";
 import { DATABASE_UP } from "./database.ts";
 import { requiredGuards } from "./dotnetGuards.ts";
-import { CHECKOUT_ENV, changedIn, hasDevSection, quoted, read, runDirectory, tracked, verdictCommand, withChanged } from "./shell.ts";
+import {
+    CHECKOUT_ENV,
+    changedIn,
+    hasDevSection,
+    quoted,
+    read,
+    runDirectory,
+    settingsOf,
+    tracked,
+    verdictCommand,
+    withChanged,
+} from "./shell.ts";
 
 const DOTNET_INPUT =
     /\.(cs|csproj|props|targets|slnx|sln|rsp)$|(^|\/)(\.editorconfig|BannedSymbols\.txt|global\.json|packages\.lock\.json|nuget\.config)$/;
@@ -22,6 +33,36 @@ export const DOTNET_BUILD = "dotnet-build";
 
 export const DOTNET_TEST = "dotnet-test";
 
+interface DotnetTestSettings {
+    excludeTraits: string[];
+}
+
+const TRAIT = "^[^=\\s]+=[^=\\s]+$";
+
+const DOTNET_TEST_SETTINGS = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        excludeTraits: {
+            description:
+                "Traits (name=value) of the tests outside the gate, e.g. live=true for tests that call a real model: dotnet-test leaves them out (--filter-not-trait), and criteria-ran says so when a criterion is named only by them.",
+            type: "array",
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: "string", pattern: TRAIT },
+        },
+    },
+};
+
+export function excludedTraits(context: StepContext): string[] {
+    return settingsOf<DotnetTestSettings>(context, DOTNET_TEST).excludeTraits ?? [];
+}
+
+function testOptions(context: StepContext): string {
+    const traits = excludedTraits(context);
+    return traits.length === 0 ? TEST_OPTIONS : `${TEST_OPTIONS} --filter-not-trait ${traits.map(quoted).join(" ")}`;
+}
+
 function dotnetChanged(context: StepContext): boolean {
     return changedIn(context, DOTNET_INPUT).length > 0;
 }
@@ -38,7 +79,7 @@ export function guardTests(context: StepContext): string | null {
         return GUARD_PACKAGE.test(text) && TEST_PROJECT.test(text);
     });
     if (projects.length === 0) return null;
-    return projects.map((project) => `dotnet test --project ${quoted(project)} ${TEST_OPTIONS}`).join(" && ");
+    return projects.map((project) => `dotnet test --project ${quoted(project)} ${testOptions(context)}`).join(" && ");
 }
 
 export function witnessed(context: StepContext, tests: string): string {
@@ -47,7 +88,7 @@ export function witnessed(context: StepContext, tests: string): string {
         'export SUWGATE_EVIDENCE="$run/evidence"',
         tests,
         verdictCommand(`tests xunit "$run/results" ${quoted("dotnet test")}`),
-        verdictCommand(`guards "$run/evidence" ${requiredGuards(context).map(quoted).join(" ")}`),
+        `{ [ $# -gt 0 ] || ${verdictCommand(`guards "$run/evidence" ${requiredGuards(context).map(quoted).join(" ")}`)}; }`,
     ].join(" && ");
 }
 
@@ -75,15 +116,17 @@ export const dotnetSteps: readonly Step[] = [
     },
     {
         id: DOTNET_TEST,
-        title: "tests (dotnet test, xUnit v3, with the checkout's databases when suwgate.yml has dev; fails on 0 tests run and unless every .NET guard of the profiles ran; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
+        title: "tests (dotnet test, xUnit v3, with the checkout's databases when suwgate.yml has dev; fails on 0 tests run and, without arguments, unless every .NET guard of the profiles ran; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
         profile: "dotnet",
         needs: ["dotnet"],
         after: [DOTNET_BUILD, DATABASE_UP],
-        run: (context) => inCheckoutEnv(context, witnessed(context, `dotnet test ${TEST_OPTIONS}`)),
+        run: (context) => inCheckoutEnv(context, witnessed(context, `dotnet test ${testOptions(context)} "$@"`)),
         quick: (context) => {
             const command = guardTests(context);
             return command === null ? null : inCheckoutEnv(context, witnessed(context, command));
         },
+        args: "dotnet test, xUnit v3 on Microsoft.Testing.Platform",
+        settingsSchema: DOTNET_TEST_SETTINGS,
         limitSeconds: 600,
     },
 ];

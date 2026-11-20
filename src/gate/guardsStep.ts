@@ -14,6 +14,15 @@ interface GuardsInput {
     guards: readonly Guard[];
     files: readonly string[];
     config: Config;
+    merged?: readonly GuardException[];
+}
+
+export function sameException(a: GuardException, b: GuardException): boolean {
+    return a.guard === b.guard && a.target === b.target && a.message === b.message;
+}
+
+function matches(exception: GuardException, finding: Finding): boolean {
+    return exception.target === finding.target && (exception.message === undefined || finding.message.includes(exception.message));
 }
 
 function shown(guard: Guard, finding: Finding): string {
@@ -46,10 +55,12 @@ export async function runGuards(input: GuardsInput): Promise<GuardsSummary> {
     let excepted = 0;
     let failed = false;
     for (const guard of input.guards) {
-        const exceptions = input.config.exceptions.filter((exception) => exception.guard === guard.id);
+        const own = input.config.exceptions.filter((exception) => exception.guard === guard.id);
+        const merged = own.filter((exception) => (input.merged ?? []).some((done) => sameException(done, exception)));
+        const exceptions = own.filter((exception) => !merged.includes(exception));
         const used = new Set<GuardException>();
         for (const finding of await findingsOf(guard, input, exceptions)) {
-            const exception = exceptions.find((candidate) => candidate.target === finding.target);
+            const exception = exceptions.find((candidate) => matches(candidate, finding));
             if (exception === undefined) {
                 lines.push(shown(guard, finding));
                 failed = true;
@@ -59,8 +70,15 @@ export async function runGuards(input: GuardsInput): Promise<GuardsSummary> {
         }
         excepted += used.size;
         for (const stale of exceptions.filter((exception) => !used.has(exception))) {
-            lines.push(`${guard.id}: ${stale.target}: the exception in ${CONFIG_FILE} matches nothing any more: delete it`);
+            lines.push(
+                `${guard.id}: ${stale.target}: the exception in ${CONFIG_FILE}${stale.message === undefined ? "" : ` (message: ${stale.message})`} matches nothing any more: delete it`,
+            );
             failed = true;
+        }
+        for (const done of merged) {
+            lines.push(
+                `${guard.id}: ${done.target}: the one-time exception is on master now and excepts nothing: delete it from ${CONFIG_FILE}`,
+            );
         }
     }
     const header = `${input.guards.length} guard${input.guards.length === 1 ? "" : "s"}, ${excepted} findings excepted in ${CONFIG_FILE}`;

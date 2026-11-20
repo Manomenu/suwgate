@@ -6,6 +6,8 @@ import type { DevSettings } from "./settings.ts";
 export const DB_USAGE = `usage: suwgate dev db up | down | reset [--yes] | psql [psql args] | logs | status
 The local PostgreSQL for development and tests: the database service of the compose file (dev.compose), published on the
 loopback, its data in a named volume that survives down. Needs docker (on Fedora: podman behind the docker command).
+A repository whose database is not a compose service names its own commands in dev.database.up and dev.database.psql:
+up and psql run them, the other commands are its own.
   up       start it (and dev.compose.extraServices), or leave it running, and wait until it answers; prints its address
   down     stop it, the data stays in the volume
   reset    delete the containers and the volume with all the data, after asking (--yes does not ask)
@@ -94,8 +96,31 @@ export function askOnTerminal(question: string): Promise<string> {
     });
 }
 
+function ownCommand(settings: DevSettings, command: DbCommand): string[] | null {
+    const { up, psql } = settings.database;
+    if (up === null && psql === null) return null;
+    if (command.kind === "up" && up !== null) return ["bash", "-c", `{ ${up}\n} >&2`];
+    if (command.kind === "psql" && psql !== null) return ["bash", "-c", `${psql} "$@"`, "suwgate", ...command.args];
+    const named = [up === null ? "" : `dev.database.up (${up})`, psql === null ? "" : `dev.database.psql (${psql})`].filter(Boolean);
+    throw new Failure(
+        `suwgate dev db ${command.kind}: this repository runs its database with its own commands, ${named.join(" and ")} in suwgate.yml, so ${command.kind} is the repository's own too: run it there`,
+        2,
+    );
+}
+
+async function runOwn(argv: readonly string[], command: DbCommand, environment: DbEnvironment): Promise<number> {
+    const { status } = await environment.exec(argv, { cwd: environment.settings.root });
+    if (status !== 0 && command.kind === "up") {
+        throw new Failure(`suwgate dev db: the database did not start: ${environment.settings.database.up ?? ""} failed (exit ${status})`);
+    }
+    if (status === 0 && command.kind === "up") environment.io.out(databaseUrl(environment.settings));
+    return status;
+}
+
 export async function runDb(command: DbCommand, environment: DbEnvironment): Promise<number> {
     const { settings, exec, io } = environment;
+    const own = ownCommand(settings, command);
+    if (own !== null) return runOwn(own, command, environment);
     if (command.kind === "reset" && !command.yes) {
         const answer = await environment.ask("Delete the local database with all its data? [y/N] ");
         if (answer.trim() !== "y") {

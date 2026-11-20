@@ -31,7 +31,7 @@ afterEach(() => {
     for (const each of folders.splice(0)) rmSync(each, { recursive: true, force: true });
 });
 
-function context(root: string, skippedSteps: string[] = []): StepContext {
+function context(root: string, skippedSteps: string[] = [], settings: Record<string, unknown> = {}): StepContext {
     return {
         root,
         cwd: root,
@@ -40,6 +40,7 @@ function context(root: string, skippedSteps: string[] = []): StepContext {
         directories: {},
         skippedSteps,
         skippedGuards: [],
+        settings,
         changed: () => [],
     };
 }
@@ -47,8 +48,8 @@ function context(root: string, skippedSteps: string[] = []): StepContext {
 const vitest = (...tests: [string, string][]) =>
     JSON.stringify({ testResults: [{ assertionResults: tests.map(([fullName, status]) => ({ fullName, status })) }] });
 
-function problemsOf(root: string, skippedSteps: string[] = []): string[] {
-    const input = criteriaRanInput(context(root, skippedSteps));
+function problemsOf(root: string, skippedSteps: string[] = [], settings: Record<string, unknown> = {}): string[] {
+    const input = criteriaRanInput(context(root, skippedSteps, settings));
     if (input === null) throw new Error("no input");
     return criteriaRan({ ...input, run: path.join(root, "run") });
 }
@@ -102,6 +103,37 @@ describe("criteria-ran", () => {
         });
 
         expect(problemsOf(root)).toEqual([]);
+    });
+
+    it("says so when a criterion is named only by tests outside the gate, on the method or on its class, and never passes it", () => {
+        const live = { "dotnet-test": { excludeTraits: ["live=true"] } };
+        const root = folder({
+            "docs/visual/spec/notes.html": SPEC,
+            "App.Tests/App.Tests.csproj": '<PackageReference Include="xunit.v3" />',
+            "App.Tests/JudgeLiveTests.cs": [
+                "public sealed class JudgeLiveTests",
+                "{",
+                "    [Fact]",
+                `    [Trait("criterion", "${SAVED}")]`,
+                '    [Trait("live", "true")]',
+                "    public async Task Judges() { }",
+                "}",
+                '[Trait("live", "true")]',
+                "public sealed class ListLiveTests",
+                "{",
+                "    [Fact]",
+                `    [Trait("criterion", "${LISTED}")]`,
+                "    public void Lists() { }",
+                "}",
+            ].join("\n"),
+            "run/dotnet-test/results/a.xunit.xml": "<assemblies></assemblies>",
+        });
+
+        expect(problemsOf(root, [], live)).toEqual([
+            `${SAVED}: named only by tests outside the gate (live=true, excludeTraits of dotnet-test in suwgate.yml): App.Tests/JudgeLiveTests.cs. The gate never runs them, so nothing in it proves the criterion: add a test the gate runs that names it, with a stand-in for the outside service (a fake model or server), and keep the outside test for the real one`,
+            expect.stringContaining(`${LISTED}: named only by tests outside the gate`),
+        ]);
+        expect(problemsOf(root)[0]).toContain("but no test naming it ran and passed");
     });
 
     it("has nothing to check without a living spec", () => {

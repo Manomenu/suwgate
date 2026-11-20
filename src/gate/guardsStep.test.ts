@@ -9,6 +9,8 @@ const config = (exceptions: Config["exceptions"]): Config => ({
     directories: {},
     add: [],
     skip: [],
+    configure: {},
+    environment: {},
     skippedGuards: [],
     exceptions,
     settings: {},
@@ -60,6 +62,52 @@ describe("the guards step", () => {
 
         expect(summary.passed).toBe(false);
         expect(summary.log).toContain("two-implementations: Sdk.IClock: the exception in suwgate.yml matches nothing any more: delete it");
+    });
+
+    it("lets an exception with a message cover only the findings of its target whose message contains it", async () => {
+        const twoFindings: Guard = {
+            ...interfaces,
+            check: () => [
+                { target: "Notes.Web/index.html", message: "a raw colour #fff on line 3" },
+                { target: "Notes.Web/index.html", message: "a raw colour #000 on line 9" },
+            ],
+        };
+        const narrowed = (message: string) =>
+            runGuards({
+                root: "/",
+                guards: [twoFindings],
+                files: [],
+                config: config([{ guard: "two-implementations", target: "Notes.Web/index.html", message, reason: "the mail template" }]),
+            });
+
+        expect((await narrowed("#fff")).log.split("\n")).toEqual([
+            "1 guard, 1 findings excepted in suwgate.yml",
+            "two-implementations: Notes.Web/index.html: a raw colour #000 on line 9",
+        ]);
+        expect((await narrowed("#123")).log).toContain(
+            "two-implementations: Notes.Web/index.html: the exception in suwgate.yml (message: #123) matches nothing any more: delete it",
+        );
+    });
+
+    it("keeps a one-time exception that master already has from excepting anything, and from going stale", async () => {
+        const once = { guard: "two-implementations", target: "Sdk.IClock", reason: "the owner approved the edit", once: true };
+        const merged = await runGuards({
+            root: "/",
+            guards: [{ ...interfaces, check: () => [] }],
+            files: [],
+            config: config([once]),
+            merged: [once],
+        });
+        const again = await runGuards({ root: "/", guards: [interfaces], files: [], config: config([once]), merged: [once] });
+        const onItsBranch = await runGuards({ root: "/", guards: [{ ...interfaces, check: () => [] }], files: [], config: config([once]) });
+
+        expect(merged).toEqual({
+            passed: true,
+            log: "1 guard, 0 findings excepted in suwgate.yml\ntwo-implementations: Sdk.IClock: the one-time exception is on master now and excepts nothing: delete it from suwgate.yml",
+        });
+        expect(again.passed).toBe(false);
+        expect(again.log).toContain("two-implementations: Sdk.IClock: one implementation");
+        expect(onItsBranch.passed).toBe(false);
     });
 
     it("turns a guard that throws into a finding instead of stopping the gate", async () => {
