@@ -49,6 +49,16 @@ describe("required-files", () => {
         expect(await missing(["web"], EVERY, { directories: { web: "Myapp.Web" } })).toContain("Myapp.Web/eslint.config.js");
     });
 
+    it("accepts prettier.config.js in place of .prettierrc.json", async () => {
+        const web = files("web").filter((file) => file !== ".prettierrc.json");
+        expect(await missing(["web"], [...EVERY, ...web, "prettier.config.js"])).toEqual([]);
+        expect(
+            await missing(["web"], [...EVERY, ...web.map((file) => `Myapp.Web/${file}`), "Myapp.Web/prettier.config.js"], {
+                directories: { web: "Myapp.Web" },
+            }),
+        ).toEqual([]);
+    });
+
     it("takes more files from its settings", async () => {
         expect(await missing(["database"], [...EVERY, "compose.yaml"], { settings: { files: ["NOTICE"] } })).toEqual(["NOTICE"]);
     });

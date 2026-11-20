@@ -7,7 +7,7 @@ const TSCONFIG = /^tsconfig(\..+)?\.json$/;
 
 const VITEST_CONFIG = /^vitest\.config\.(ts|mts|js|mjs)$/;
 
-const UNIT_PROJECT = /\bname:\s*["'`]unit["'`]/;
+const UNIT_PROJECT = /\bname:\s*["'`]unit["'`]|\bunitTests\(/;
 
 export const PNPM_INSTALL = "pnpm-install";
 
