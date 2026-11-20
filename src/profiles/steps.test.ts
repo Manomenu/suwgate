@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -13,6 +13,7 @@ import { guardTests, inCheckoutEnv } from "./dotnet.ts";
 import { stepsFor } from "./index.ts";
 import { attw, consumerApp, visual } from "./library.ts";
 import { typecheck, unitTests } from "./node.ts";
+import { readRun } from "./reports.ts";
 
 const folders: string[] = [];
 
@@ -254,7 +255,8 @@ describe("attw and consumer-app", () => {
     });
 });
 
-const TEST_OPTIONS = '--no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
+const TEST_OPTIONS =
+    '-p:CustomAfterMicrosoftCommonTargets="$run/report-names.targets" --no-build --no-progress --zero-tests-policy strict --report-xunit-xml --results-directory "$run/results"';
 
 describe("dotnet-test --quick", () => {
     const files = {
@@ -359,6 +361,36 @@ describe("the .NET steps", () => {
         expect(nothing.output).toContain("dotnet test ran 0 tests");
 
         expect(run('<test name="A.Notes.Saves" result="Pass" />', []).calls).not.toContain("--ignore-exit-code");
+    });
+
+    it("give each test project its own xUnit report, so projects that start in the same microsecond keep both reports", () => {
+        const fakeDotnet = [
+            "#!/usr/bin/env bash",
+            'for arg in "$@"; do case "$arg" in -p:CustomAfterMicrosoftCommonTargets=*) targets="${arg#*=}" ;; esac; done',
+            'while [ $# -gt 0 ]; do [ "$1" = --results-directory ] && dir="$2"; shift; done',
+            'mkdir -p "$dir"',
+            "report() {",
+            '    name="runner_host_2026-11-20_12_42_52.819352.xunit.xml"',
+            '    [ -f "$targets" ] && name="$(sed -n \'s/.*--report-xunit-xml-filename &quot;\\([^&]*\\)&quot;.*/\\1/p\' "$targets" | sed "s/\\$(MSBuildProjectName)/$1/; s/\\$(TargetFramework)/net10.0/")"',
+            '    echo "<assemblies><assembly><collection>$2</collection></assembly></assemblies>" >"$dir/$name"',
+            "}",
+            'report App.Tests \'<test name="App.Tests.Saves" result="Pass"><traits><trait name="criterion" value="APP-1" /></traits></test>\'',
+            'report App.Gate \'<test name="App.Gate.Live" result="Skip" />\'',
+        ].join("\n");
+        const root = repository({ "suwgate.yml": "profiles: [dotnet]\n", "bin/dotnet": fakeDotnet });
+        execFileSync("chmod", ["+x", "bin/dotnet"], { cwd: root });
+        const command = line(step("dotnet-test").run, context(root, { profile: "dotnet" }));
+        if (typeof command !== "string") throw new Error("no command");
+        const env = { ...process.env, PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`, SUWGATE_RUN: root };
+        const result = spawnSync("bash", ["-c", command, "suwgate", "--filter-class", "*"], { cwd: root, env, encoding: "utf8" });
+
+        expect(result.stdout + result.stderr).not.toContain("ran 0 tests");
+        expect(result.status).toBe(0);
+        expect(readRun("xunit", path.join(root, "dotnet-test", "results"))).toEqual({ executed: 1, passed: ["APP-1:"] });
+        expect(readdirSync(path.join(root, "dotnet-test", "results")).sort()).toEqual([
+            "App.Gate.net10.0.xunit.xml",
+            "App.Tests.net10.0.xunit.xml",
+        ]);
     });
 });
 
