@@ -58,7 +58,11 @@ export async function check(options: CheckOptions): Promise<CheckResult> {
         results,
         command,
         totalSeconds,
-        quickLimit: options.quick ? (typeof quickLimit === "number" ? quickLimit : DEFAULT_QUICK_LIMIT_SECONDS) : null,
+        quickLimit: options.quick
+            ? typeof quickLimit === "number"
+                ? quickLimit
+                : (loaded.config.quickLimitSeconds ?? DEFAULT_QUICK_LIMIT_SECONDS)
+            : null,
         ci: (options.env["CI"] ?? "") !== "",
         exceptions: loaded.config.exceptions.length,
         verbose: options.verbose,
