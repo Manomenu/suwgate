@@ -9,6 +9,7 @@ export interface ReportInput {
     quickLimit: number | null;
     ci: boolean;
     exceptions: number;
+    mergedOnce?: number;
     verbose: boolean;
 }
 
@@ -21,8 +22,10 @@ function row(status: string, seconds: number | null, title: string, note = ""): 
     return `  ${status.padEnd(4)} ${seconds === null ? "     " : `${String(seconds).padStart(4)}s`}  ${title}${note === "" ? "" : ` — ${note}`}`;
 }
 
-function tail(log: string): string {
-    return log.trimEnd().split("\n").slice(-FAILURE_LINES).join("\n");
+function shownLog(log: string, all: boolean): { text: string; heading: string } {
+    const lines = log.trimEnd().split("\n");
+    if (all || lines.length <= FAILURE_LINES) return { text: lines.join("\n"), heading: `all ${lines.length} lines` };
+    return { text: lines.slice(-FAILURE_LINES).join("\n"), heading: `last ${FAILURE_LINES} of ${lines.length} lines, --verbose shows all` };
 }
 
 export function report(input: ReportInput): Report {
@@ -48,9 +51,8 @@ export function report(input: ReportInput): Report {
         } else if (result.status === "fail") {
             failed = true;
             rows.push(row("FAIL", result.seconds, step.title));
-            failures.push(
-                `==================== failed: ${step.title} (last ${FAILURE_LINES} lines) ====================\n${tail(result.log)}`,
-            );
+            const shown = shownLog(result.log, input.verbose);
+            failures.push(`==================== failed: ${step.title} (${shown.heading}) ====================\n${shown.text}`);
         } else {
             passedCount++;
             if (input.verbose) rows.push(row("PASS", result.seconds, step.title));
@@ -68,6 +70,11 @@ export function report(input: ReportInput): Report {
     }
     const extras = [
         `${input.exceptions} exception${input.exceptions === 1 ? "" : "s"} in suwgate.yml`,
+        ...((input.mergedOnce ?? 0) > 0
+            ? [
+                  `${input.mergedOnce} one-time exception${input.mergedOnce === 1 ? " is" : "s are"} on master now: delete ${input.mergedOnce === 1 ? "it" : "them"}`,
+              ]
+            : []),
         ...(skippedByConfig.length > 0 ? [`skipped in suwgate.yml: ${skippedByConfig.join(", ")}`] : []),
     ].join("; ");
     const lines: string[] = [];

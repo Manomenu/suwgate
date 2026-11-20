@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 
+import type { Environment } from "./config.ts";
 import type { Outcome, PlannedStep } from "./plan.ts";
 
 const KILL_GRACE_MS = 10_000;
@@ -22,10 +23,31 @@ function killGroup(pid: number | undefined, signal: NodeJS.Signals): void {
     }
 }
 
-function runCommand(line: string, cwd: string, limitSeconds: number, env: NodeJS.ProcessEnv): Promise<Outcome> {
+function matcher(pattern: string): RegExp {
+    return new RegExp(`^${pattern.replaceAll("*", ".*").replaceAll("?", ".")}$`, "i");
+}
+
+function stepEnv(env: NodeJS.ProcessEnv, layers: readonly Environment[]): NodeJS.ProcessEnv {
+    return layers.reduce<NodeJS.ProcessEnv>((current, layer) => {
+        const cleared = (layer.unset ?? []).map(matcher);
+        const kept = Object.entries(current).filter(([name]) => !cleared.some((pattern) => pattern.test(name)));
+        return { ...Object.fromEntries(kept), ...layer.env };
+    }, env);
+}
+
+function runCommand(
+    command: { line: string; cwd: string; args?: readonly string[] },
+    limitSeconds: number,
+    env: NodeJS.ProcessEnv,
+): Promise<Outcome> {
     return new Promise((resolve) => {
         const chunks: Buffer[] = [];
-        const child = spawn("bash", ["-c", line], { cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+        const child = spawn("bash", ["-c", command.line, "suwgate", ...(command.args ?? [])], {
+            cwd: command.cwd,
+            env,
+            detached: true,
+            stdio: ["ignore", "pipe", "pipe"],
+        });
         child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
         child.stderr.on("data", (chunk: Buffer) => chunks.push(chunk));
         let timedOut = false;
@@ -70,7 +92,7 @@ export async function runSteps(steps: readonly PlannedStep[], env: NodeJS.Proces
             const limit = stepLimit ?? step.limitSeconds;
             const outcome =
                 step.command !== undefined
-                    ? await runCommand(step.command.line, step.command.cwd, limit, env)
+                    ? await runCommand(step.command, limit, stepEnv(env, step.environment))
                     : await (step.inline ?? (() => Promise.resolve({ passed: true, log: "" })))();
             return {
                 step,

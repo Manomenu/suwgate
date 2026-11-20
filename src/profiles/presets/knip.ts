@@ -3,12 +3,15 @@ import path from "node:path";
 
 export interface KnipConfig {
     ignore?: string[];
+    ignoreIssues?: Record<string, string[]>;
     ignoreDependencies?: string[];
     playwright?: { config?: string[] };
     [key: string]: unknown;
 }
 
-const STEP_TOOLS = ["publint", "@arethetypeswrong/cli", "openapi-typescript"];
+const STEP_TOOLS = ["prettier", "publint", "@arethetypeswrong/cli", "openapi-typescript"];
+
+const GENERATED_ISSUES = ["files", "exports", "nsExports", "types", "nsTypes", "enumMembers", "namespaceMembers", "duplicates"];
 
 const GENERATED = ["src/api/openapi.d.ts"];
 
@@ -32,7 +35,8 @@ export function knip(config: KnipConfig = {}, directory = process.cwd()): KnipCo
     const playwrightConfigs = [...PLAYWRIGHT_CONFIGS.filter(present), ...(config.playwright?.config ?? [])];
     return {
         ...config,
-        ignore: [...GENERATED.filter(present), ...(config.ignore ?? [])],
+        ignore: [...(config.ignore ?? [])],
+        ignoreIssues: { ...Object.fromEntries(GENERATED.filter(present).map((file) => [file, GENERATED_ISSUES])), ...config.ignoreIssues },
         ignoreDependencies: [...STEP_TOOLS.filter((tool) => installed.includes(tool)), ...(config.ignoreDependencies ?? [])],
         ...(playwrightConfigs.length === 0 ? {} : { playwright: { ...config.playwright, config: playwrightConfigs } }),
     };

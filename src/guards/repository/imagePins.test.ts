@@ -39,6 +39,15 @@ describe("image-pins", () => {
         ]);
     });
 
+    it("leaves a Helm template to the deployment, which sets the tag", async () => {
+        const files = {
+            "deploy/chart/templates/server.yaml": '      containers:\n        - image: {{ include "app.image" . }}\n          name: x\n',
+            "deploy/chart/templates/web.yaml": '        - image: "{{ .Values.web.image }}"\n',
+        };
+
+        expect(await findingsOf(imagePins, files)).toEqual([]);
+    });
+
     it("says how to pin it", async () => {
         const [finding] = await findingsOf(imagePins, { "compose.yaml": "image: postgres\n" });
         expect(finding?.message).toContain("postgres moves with every release");

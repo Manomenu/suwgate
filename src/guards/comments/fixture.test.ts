@@ -80,6 +80,8 @@ const config = (exceptions: GuardException[] = []): Config => ({
     directories: {},
     add: [],
     skip: [],
+    configure: {},
+    environment: {},
     skippedGuards: [],
     exceptions,
     settings: {},

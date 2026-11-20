@@ -8,7 +8,8 @@ const NGINX = new Set(["nginx.conf", "nginx.conf.template"]);
 const SHELLCHECK_DIRECTIVE = /^# shellcheck (disable|enable|source|shell|external-sources)=\S+$/;
 const DOCKERFILE_SYNTAX = /^# syntax=\S+$/;
 const EDITORCONFIG_CRITERION = new RegExp(`^# ${CRITERION_ID}$`);
-const RECIPE_OR_MODULE = /^(@?[A-Za-z_][\w-]*(\s+[^:=]*)?:(?!=)|mod\s+[\w-]+\s*$)/;
+const RECIPE_OR_MODULE = /^(@?[A-Za-z_][\w-]*(\s+[^:]*)?:(?!=)|mod\??\s+[\w-]+(\s+(['"])[^'"]+\4)?\s*$)/;
+const BLOCK_SCALAR = /^(\s*)((?:-\s+)*)(?:([^\s#][^#]*?):\s+)?[|>](?:[1-9][-+]?|[-+][1-9]?)?\s*(?:#.*)?$/;
 
 const isJust = (file: string) => ["justfile", ".justfile"].includes(fileName(file).toLowerCase()) || file.endsWith(".just");
 const isShell = (file: string) => file.endsWith(".sh") || file.endsWith(".bash") || file.startsWith(".githooks/");
@@ -63,9 +64,30 @@ function isAllowed(file: string, lines: readonly string[], index: number, commen
     );
 }
 
+const isYaml = (file: string) => file.endsWith(".yaml") || file.endsWith(".yml");
+
+const indentOf = (line: string) => line.length - line.trimStart().length;
+
+function blockScalarLines(lines: readonly string[]): Set<number> {
+    const inside = new Set<number>();
+    let parent: number | null = null;
+    lines.forEach((line, index) => {
+        if (parent !== null && (line.trim() === "" || indentOf(line) > parent)) {
+            inside.add(index);
+            return;
+        }
+        parent = null;
+        const start = BLOCK_SCALAR.exec(line);
+        if (start !== null) parent = (start[1] ?? "").length + (start[3] === undefined ? 0 : (start[2] ?? "").length);
+    });
+    return inside;
+}
+
 export function hashCommentsIn(file: string, text: string): FoundComment[] {
     const lines = text.split("\n");
+    const literal = isYaml(file) ? blockScalarLines(lines) : new Set<number>();
     return lines.flatMap((line, index) => {
+        if (literal.has(index)) return [];
         const comment = commentOn(file, line);
         return comment !== null && !isAllowed(file, lines, index, comment) ? [{ line: index + 1, text: comment }] : [];
     });

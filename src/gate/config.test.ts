@@ -13,6 +13,17 @@ const withSettings: Guard = {
     check: () => [],
 };
 const build: Step = { id: "dotnet-build", title: "build", run: "true" };
+const test: Step = {
+    id: "dotnet-test",
+    title: "test",
+    run: "true",
+    after: ["dotnet-build"],
+    settingsSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { excludeTraits: { type: "array", items: { type: "string" } } },
+    },
+};
 const catalog: Catalog = {
     guards: [lonelyInterfaces, webOnly, withSettings],
     dotnetGuards: [
@@ -23,7 +34,7 @@ const catalog: Catalog = {
             settingsSchema: { type: "object", additionalProperties: false, properties: { directory: { type: "string" } } },
         },
     ],
-    stepsFor: (profiles) => (profiles.includes("dotnet") ? [build] : []),
+    stepsFor: (profiles) => (profiles.includes("dotnet") ? [build, test] : []),
 };
 
 function problems(text: string): string[] {
@@ -59,6 +70,8 @@ describe("a valid suwgate.yml", () => {
                 directories: {},
                 add: [{ name: "pack", run: "dotnet pack", after: ["dotnet-build"] }],
                 skip: [{ step: "dotnet-build", reason: "built by the pack step" }],
+                configure: {},
+                environment: {},
                 skippedGuards: [{ guard: "architecture/layers", reason: "a library has no layers" }],
                 exceptions: [
                     { guard: "required-files", target: "LICENSE", reason: "the owner keeps the licence in the README" },
@@ -67,6 +80,94 @@ describe("a valid suwgate.yml", () => {
                 settings: { "with-settings": { files: ["NOTICE"] } },
             },
         });
+    });
+});
+
+describe("steps.configure and env", () => {
+    it("loads the knobs of a profile's step, the environment of every step, and a reason shared by more than a hundred aliases", () => {
+        const exceptions = Array.from({ length: 120 }, (_, index) => `  - { guard: required-files, target: F${index}, reason: *why }`);
+        const loaded = parseConfig(
+            [
+                "profiles: [dotnet]",
+                "env: { CI_LIKE: '1' }",
+                "unset: [Models__*]",
+                "steps:",
+                "  configure:",
+                "    dotnet-test:",
+                "      limitSeconds: 900",
+                "      after: [dotnet-build]",
+                "      env: { E2E_X: '1' }",
+                "      unset: [LLM_MODEL_*]",
+                "      settings: { excludeTraits: [live=true] }",
+                "exceptions:",
+                "  - { guard: required-files, target: F, reason: &why the owner keeps it elsewhere }",
+                ...exceptions,
+            ].join("\n"),
+            catalog,
+        );
+
+        expect("config" in loaded && loaded.config.exceptions.length).toBe(121);
+        expect("config" in loaded && loaded.config.exceptions.at(-1)?.reason).toBe("the owner keeps it elsewhere");
+        expect("config" in loaded && loaded.config.environment).toEqual({ env: { CI_LIKE: "1" }, unset: ["Models__*"] });
+        expect("config" in loaded && loaded.config.configure).toEqual({
+            "dotnet-test": {
+                limitSeconds: 900,
+                after: ["dotnet-build"],
+                env: { E2E_X: "1" },
+                unset: ["LLM_MODEL_*"],
+                settings: { excludeTraits: ["live=true"] },
+            },
+        });
+    });
+
+    it.each([
+        [
+            "steps:\n  configure:\n    e2e: { limitSeconds: 9 }\n",
+            'steps.configure.e2e: the profiles dotnet have no step "e2e": their steps are dotnet-build, dotnet-test',
+        ],
+        [
+            "steps:\n  add:\n    - { name: pack, run: x }\n  configure:\n    pack: { limitSeconds: 9 }\n",
+            'steps.configure.pack: "pack" is added in steps.add, which takes its limitSeconds and after itself',
+        ],
+        [
+            "steps:\n  configure:\n    dotnet-build: { settings: { a: 1 } }\n",
+            'steps.configure.dotnet-build.settings: the step "dotnet-build" takes no settings',
+        ],
+        ["steps:\n  configure:\n    dotnet-test: { settings: { traits: [] } }\n", 'has an unknown key "traits"'],
+        ["steps:\n  configure:\n    dotnet-test: { after: [nope] }\n", 'no step "nope": the steps are dotnet-build, dotnet-test'],
+        [
+            "steps:\n  skip:\n    - { step: dotnet-test, reason: r }\n  configure:\n    dotnet-test: { limitSeconds: 9 }\n",
+            '"dotnet-test" is skipped in steps.skip, so this configuration is never used',
+        ],
+        [
+            "steps:\n  configure:\n    dotnet-build: { after: [dotnet-test] }\n",
+            "steps wait for each other in a circle: dotnet-build -> dotnet-test -> dotnet-build",
+        ],
+        ["env: { E2E_X: 1 }\n", "env.E2E_X must be string"],
+        ["unset: ['Models__[a]']\n", "unset[0] must match pattern"],
+    ])("refuses %s", (text, expected) => {
+        expect(problems(`profiles: [dotnet]\n${text}`).join("\n")).toContain(expected);
+    });
+});
+
+describe("exceptions narrowed to one finding, and one-time exceptions", () => {
+    it("takes message and once on a repository guard, and a second exception of the same target with another message", () => {
+        expect(
+            problems(
+                [
+                    "profiles: [dotnet]",
+                    "exceptions:",
+                    "  - { guard: required-files, target: X, message: first, once: true, reason: r }",
+                    "  - { guard: required-files, target: X, message: second, reason: r }",
+                ].join("\n"),
+            ),
+        ).toEqual([]);
+    });
+
+    it("refuses message and once on a .NET guard, whose packages match by target only", () => {
+        expect(
+            problems("profiles: [dotnet]\nexceptions:\n  - { guard: architecture/layers, target: X, once: true, reason: r }\n")[0],
+        ).toContain("the .NET packages match an exception by its target only: delete message and once");
     });
 });
 

@@ -58,7 +58,7 @@ export const imagePins: Guard = {
             isDockerfile(baseName(file)) || /\.(ya?ml|sh)$/.test(file) ? references(file, context.read(file)) : [],
         );
         const unpinned: Finding[] = found
-            .filter(({ image }) => !image.includes("$") && !isPinned(image))
+            .filter(({ image }) => !image.includes("$") && !image.includes("{{") && !isPinned(image))
             .map(({ file, line, image }) => ({
                 target: file,
                 line,

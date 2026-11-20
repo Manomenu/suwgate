@@ -38,6 +38,7 @@ interface Where {
     directories?: Partial<Record<Profile, string>>;
     changed?: string[];
     skippedGuards?: string[];
+    settings?: Record<string, unknown>;
 }
 
 function context(root: string, where: Where = {}): StepContext {
@@ -51,6 +52,7 @@ function context(root: string, where: Where = {}): StepContext {
         directories,
         skippedSteps: [],
         skippedGuards: where.skippedGuards ?? [],
+        settings: where.settings ?? {},
         changed: () => where.changed ?? [],
     };
 }
@@ -115,6 +117,30 @@ describe("the steps of the profiles", () => {
         const ids = all.map((candidate) => candidate.id);
         expect(all.flatMap((candidate) => (candidate.after ?? []).filter((after) => !ids.includes(after)))).toEqual([]);
         expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+        expect(all.flatMap((candidate) => (candidate.orderAfter ?? []).filter((after) => !ids.includes(after)))).toEqual([]);
+    });
+
+    it("put the arguments of suwgate step where the tool takes them exactly when a step says it takes them", () => {
+        const root = repository({
+            "suwgate.yml": "profiles: [web, library, dotnet]\n",
+            ".storybook/main.ts": "",
+            "visual/playwright.config.ts": "",
+            "node_modules/@playwright/test/package.json": JSON.stringify({ version: "1.50.0" }),
+            "gate/consumer/app/package.json": "{}",
+            "gate/consumer/playwright.config.ts": "",
+            "e2e/playwright.config.ts": "",
+        });
+        const at = context(root, { profiles: ["web", "library", "dotnet"] });
+        const taking = stepsFor(["web", "library", "dotnet", "database"]).flatMap((candidate) => {
+            const command = line(candidate.run, at);
+            return typeof command === "string" && command.includes('"$@"') ? [candidate.id] : [];
+        });
+        const declared = stepsFor(["web", "library", "dotnet", "database"]).flatMap((candidate) =>
+            candidate.args === undefined ? [] : [candidate.id],
+        );
+
+        expect(taking.sort()).toEqual(declared.sort());
+        expect(declared.sort()).toEqual(["consumer-app", "dotnet-test", "e2e", "stories", "unit-tests", "visual"]);
     });
 });
 
@@ -290,6 +316,18 @@ describe("the .NET steps", () => {
         );
         expect(inCheckoutEnv(context(repository({ "suwgate.yml": "profiles: [dotnet]\n" })), "dotnet test")).not.toContain("checkout-env");
     });
+
+    it("leave the tests of excludeTraits out, and ask the guards' evidence only of a run without arguments", () => {
+        const root = repository({ "suwgate.yml": "profiles: [dotnet]\n" });
+        const command = line(
+            step("dotnet-test").run,
+            context(root, { profile: "dotnet", settings: { "dotnet-test": { excludeTraits: ["live=true"] } } }),
+        );
+
+        expect(command).toContain("--filter-not-trait 'live=true' \"$@\"");
+        expect(command).toContain("{ [ $# -gt 0 ] || ");
+        expect(line(step("dotnet-test").run, context(root, { profile: "dotnet" }))).not.toContain("--filter-not-trait");
+    });
 });
 
 describe("database-up and compose", () => {
@@ -301,6 +339,14 @@ describe("database-up and compose", () => {
         expect(line(step("compose").run, bare)).toBeNull();
         expect(line(step("database-up").run, composed)).toContain("docker compose --profile db up -d --wait db");
         expect(line(step("compose").run, composed)).toBe("docker compose config --quiet && docker compose --profile db config --quiet");
+    });
+
+    it("start the repository's own database when dev.database.up names its command", () => {
+        const own = context(
+            repository({ "suwgate.yml": "profiles: [database]\ndev:\n  name: x\n  database:\n    up: scripts/db.sh up\n" }),
+        );
+
+        expect(line(step("database-up").run, own)).toContain("dev db up");
     });
 });
 
@@ -314,7 +360,7 @@ describe("e2e", () => {
         const directories = { web: "Myapp.Web" };
 
         expect(line(step("e2e").run, context(root, { profile: "web", directories }))).toContain(
-            'PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" pnpm exec playwright test -c e2e/playwright.config.ts --reporter=list,json\n',
+            'PLAYWRIGHT_JSON_OUTPUT_FILE="$run/playwright.json" pnpm exec playwright test -c e2e/playwright.config.ts "$@"\n',
         );
         expect(line(step("e2e").run, context(repository({}), { profile: "web" }))).toBeNull();
     });
@@ -341,8 +387,48 @@ describe("e2e", () => {
         expect(log[1]).toMatch(
             /exec -T db psql .* -d postgres -c DROP DATABASE IF EXISTS myapp_e2e WITH \(FORCE\) -c CREATE DATABASE myapp_e2e$/,
         );
-        expect(log[2]).toMatch(/^pnpm exec playwright test -c e2e\/playwright.config.ts --reporter=list,json myapp_e2e \d+$/);
+        expect(log[2]).toMatch(/^pnpm exec playwright test -c e2e\/playwright.config.ts myapp_e2e \d+$/);
         expect(existsSync(path.join(root, ".artifacts/logs"))).toBe(true);
+    });
+
+    it("starts the repository's own database, runs the before commands in the root and hands Playwright the step's arguments", () => {
+        const root = repository({
+            "suwgate.yml": [
+                "profiles: [web, dotnet, database]",
+                "directories:\n  web: Myapp.Web",
+                "dev:",
+                "  name: myapp",
+                "  database:",
+                '    up: echo "db up" >>"$CALLS"',
+                '    psql: echo "db psql" >>"$CALLS"',
+            ].join("\n"),
+            "Myapp.Web/e2e/playwright.config.ts": "",
+            "bin/pnpm": `#!/usr/bin/env bash\necho "pnpm $*" >>"$CALLS"\n[ -z "\${PLAYWRIGHT_JSON_OUTPUT_FILE:-}" ] || echo '${PASSED_PLAYWRIGHT}' >"$PLAYWRIGHT_JSON_OUTPUT_FILE"\n`,
+        });
+        execFileSync("chmod", ["+x", "bin/pnpm"], { cwd: root });
+        const at = context(root, {
+            profile: "web",
+            directories: { web: "Myapp.Web" },
+            settings: { e2e: { before: ['echo "before in $PWD" >>"$CALLS"'] } },
+        });
+        const command = line(step("e2e").run, at);
+        if (typeof command !== "string") throw new Error("no command");
+        const calls = path.join(root, "calls.log");
+        const env = {
+            ...process.env,
+            PATH: `${path.join(root, "bin")}:${process.env["PATH"] ?? ""}`,
+            CALLS: calls,
+            CI: "",
+            E2E_DATABASE: "",
+        };
+        execFileSync("bash", ["-c", command, "suwgate", "--headed", "-g", "two words"], { cwd: at.cwd, env, stdio: "ignore" });
+
+        expect(readFileSync(calls, "utf8").trim().split("\n")).toEqual([
+            "db up",
+            "db psql -q -d postgres -c DROP DATABASE IF EXISTS myapp_e2e WITH (FORCE) -c CREATE DATABASE myapp_e2e",
+            `before in ${root}`,
+            "pnpm exec playwright test -c e2e/playwright.config.ts --headed -g two words",
+        ]);
     });
 
     it("refuses to recreate a database whose name lacks e2e", () => {
@@ -398,6 +484,21 @@ describe("the contract steps", () => {
         expect(line(step("api-version").run, context(repository({ "contract/openapi.json": "{}" })))).toContain(
             'oasdiff breaking "$work/base.json" contract/openapi.json --fail-on ERR',
         );
+    });
+
+    it("look for the contract where settings.contract of api-contract says, and refuse every break with breaking: never", () => {
+        const root = repository({ "Myapp.Server/Myapp.Server.csproj": server, "Myapp.Server/openapi.json": "{}" });
+        const contract = { "api-contract": { contract: "Myapp.Server/openapi.json" } };
+        const major = line(step("api-version").run, context(root, { settings: contract }));
+        const never = line(step("api-version").run, context(root, { settings: { ...contract, "api-version": { breaking: "never" } } }));
+
+        expect(apiContract(context(root, { settings: contract }))).toContain(
+            "diff -q \"$work\"/'Myapp.Server.json' Myapp.Server/openapi.json",
+        );
+        expect(apiContract(context(root))).toBeNull();
+        expect(major).toContain("raise the major version in Myapp.Server/package.json");
+        expect(never).toContain("this repository allows no break (api-version breaking: never in suwgate.yml)");
+        expect(never).not.toContain("as the new major version");
     });
 
     const KEY = "contract";

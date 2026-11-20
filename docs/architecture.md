@@ -27,14 +27,20 @@ Files at the root: `suwgate.yml` (this repository's own gate), `package.json`, `
 1. the guards step first, which runs every repository guard whose profiles the repository has, in-process;
 2. then the steps of each profile in the fixed order `web`, `library`, `dotnet`, `database`, then those of every repository
    (shellcheck, gitleaks), each step once even when two profiles bring it (web and library share the Node steps);
-3. then the steps `steps.add` adds. `steps.skip` marks a step skipped with its reason.
+3. then the steps `steps.add` adds. `steps.skip` marks a step skipped with its reason, and `steps.configure` changes a step's
+   ceiling, adds to its `after`, sets its environment and hands it its validated `settings`.
+
+`suwgate step <id>` plans the same way but keeps only that step and the steps its `after` reaches (or the step alone with
+`--only`), runs the named step even when `steps.skip` names it, and passes the arguments after `--` to its command as bash's
+positional parameters.
 
 Every step whose `after` steps are done starts at once, so independent steps run in parallel and the slowest one sets the
 time. A step whose tool is missing is SKIP (a failure when `CI` is set); a step whose `after` step failed is not run and fails.
 Each step has a ceiling (`limitSeconds`, `SUWGATE_STEP_LIMIT` overrides all); above it its process group is killed.
 
 The report is quiet: a green gate prints one line with the step count, the time and the number of exceptions. Otherwise it
-prints the last 25 lines of each failed step's output, then one line per failed or skipped step. `--verbose` lists every step.
+prints the last 25 lines of each failed step's output, then one line per failed or skipped step. `--verbose` lists every step
+and prints the whole output of a failed one.
 
 `--quick` runs the guards (all but those marked `quick: false`) and only the steps with a `quick` run, which usually look at
 the files changed since the branch left `master` (committed or not, plus untracked files); a step with nothing to look at
@@ -62,7 +68,8 @@ relative, with `/`), `profiles`, `directories` (where a profile's project lives)
 
 A finding is `{ target, message, line? }`. `target` is what an exception would name: a path, a type, an interface, a step. The
 message states the fix. The gate, not the guard, applies the exceptions: a finding whose target an exception of this guard names
-is counted as excepted, every other finding fails the guards step as `<id>: <target>[:<line>]: <message>`, and an exception that
+(and whose message contains the exception's `message`, when it has one) is counted as excepted, an exception with `once: true`
+that master's `suwgate.yml` already has excepts nothing and is never stale, every other finding fails the guards step as `<id>: <target>[:<line>]: <message>`, and an exception that
 matches no finding fails it too, until it is deleted. A guard that throws becomes a finding of its own, so one broken guard does
 not hide the others.
 
@@ -74,18 +81,21 @@ a setting for more files, a finding per missing file.
 
 A step is a value of type `Step` (`src/gate/contract.ts`) in a profile's list in `src/profiles/`:
 
-| Field          | What it is                                                                                                                                           |
-| :------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | kebab-case, unique among all steps; `steps.skip` and `after` name it                                                                                 |
-| `title`        | what the report calls it, with the tool in brackets                                                                                                  |
-| `run`          | a bash command, or a function of the context that returns one, `null` (nothing to check: it passes) or `{ skip: reason }` (it cannot run here: SKIP) |
-| `quick`        | absent: full gate only; `true`: the same `run` in `--quick`; a command or function: what `--quick` runs instead                                      |
-| `profile`      | the profile it belongs to: it runs in that profile's directory (`directories` in `suwgate.yml`), else in the root                                    |
-| `needs`        | the tools its command calls; one missing from `PATH` makes it SKIP with the reason, never PASS (a run with nothing to check passes without them)     |
-| `after`        | steps that must finish first (the build before the tests); everything else runs in parallel                                                          |
-| `limitSeconds` | its ceiling (300 by default)                                                                                                                         |
+| Field            | What it is                                                                                                                                           |
+| :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | kebab-case, unique among all steps; `steps.skip` and `after` name it                                                                                 |
+| `title`          | what the report calls it, with the tool in brackets                                                                                                  |
+| `run`            | a bash command, or a function of the context that returns one, `null` (nothing to check: it passes) or `{ skip: reason }` (it cannot run here: SKIP) |
+| `quick`          | absent: full gate only; `true`: the same `run` in `--quick`; a command or function: what `--quick` runs instead                                      |
+| `profile`        | the profile it belongs to: it runs in that profile's directory (`directories` in `suwgate.yml`), else in the root                                    |
+| `needs`          | the tools its command calls; one missing from `PATH` makes it SKIP with the reason, never PASS (a run with nothing to check passes without them)     |
+| `after`          | steps that must finish first (the build before the tests); everything else runs in parallel; `suwgate step` runs them with the step                  |
+| `orderAfter`     | steps it waits for only when they run too, for the order of the full gate (no rebuild under a running server); `suwgate step` does not pull them in  |
+| `limitSeconds`   | its ceiling (300 by default)                                                                                                                         |
+| `settingsSchema` | optional JSON Schema of its `steps.configure.<id>.settings`; without it the step takes no settings                                                   |
+| `args`           | the tool that takes `suwgate step <id> -- <args>`, shown in the list; the command puts `"$@"` where they go, and a step without it refuses them      |
 
-`StepContext` gives `root`, `cwd`, `quick`, `profiles`, `directories` (as a guard gets them), `skippedSteps` and `skippedGuards` (the ids `steps.skip` and `guards.skip` name) and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
+`StepContext` gives `root`, `cwd`, `quick`, `profiles`, `directories` (as a guard gets them), `skippedSteps` and `skippedGuards` (the ids `steps.skip` and `guards.skip` name), `settings` (the validated settings of `steps.configure`, by step id, so `api-version` reads the contract `api-contract` names) and `changed()`, the changed files relative to the root (`src/profiles/shell.ts` has the
 helpers that filter them to a step's directory and quote them). A step's output is kept and shown only when it fails.
 
 ## The contract of a .NET guard

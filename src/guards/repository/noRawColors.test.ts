@@ -11,6 +11,8 @@ describe("no-raw-colors", () => {
         ["background: oklch(0.7 0.1 200)", true],
         ['<div className="bg-primary text-muted-foreground" />', false],
         ['style={{ color: "var(--primary)" }}', false],
+        ['const mail = "&#106;&#64;&#x6a;";', false],
+        ['const both = "&#106; #abc";', true],
     ])("judges %s", async (line, raw) => {
         const findings = await findingsOf(noRawColors, { "src/button/Button.tsx": line }, { profiles: ["web"] });
         expect(findings.length > 0).toBe(raw);

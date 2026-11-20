@@ -7,7 +7,7 @@ command takes the most solid behaviour of the copies of the template, alfusion, 
 between repositories (names, ports, folders) from `suwgate.yml`. Nothing app-specific is in the CLI.
 
 ```sh
-suwgate dev db up|down|reset|psql|logs|status   # the local PostgreSQL of the compose file
+suwgate dev db up|down|reset|psql|logs|status   # the local PostgreSQL of the compose file, or of dev.database.up and psql
 suwgate dev logs [--all] [--trace <id>] [--compose] [-n N] [--file <path>]
 suwgate dev smoke [<base-url>]
 suwgate dev server [dotnet run arguments]
@@ -31,31 +31,35 @@ dev:
 
 Only `name` is required. The schema (`schema/suwgate.schema.json`) lists every key; the defaults are below.
 
-| Key                                   | Default                                             | Used by                                                                                          |
-| :------------------------------------ | :-------------------------------------------------- | :----------------------------------------------------------------------------------------------- |
-| `name`                                | required                                            | the tmux session `<name>-dev`; the database user, password and name                              |
-| `portOffset`                          | `0`                                                 | added to every default port, so repositories on one machine do not collide                       |
-| `ports.server` / `web`                | `6300` / `3300` (+ offset)                          | the titles of the tmux panes                                                                     |
-| `ports.e2eServer` / `e2eWeb`          | `6301` / `3301` (+ offset)                          | `checkout-env`: the e2e ports of the main checkout                                               |
-| `ports.database`                      | `5533` (+ offset)                                   | the address `db up` prints, the test connection string of `checkout-env`                         |
-| `ports.stack`                         | `8190` (+ offset)                                   | `smoke`: the base url `http://127.0.0.1:<port>`                                                  |
-| `compose.file`                        | `compose.yaml`                                      | `db`, `logs --compose`                                                                           |
-| `compose.profile`                     | `db`                                                | the compose profile of the database                                                              |
-| `compose.databaseService`             | `db`                                                | the PostgreSQL service                                                                           |
-| `compose.serverService`               | `server`                                            | `logs --compose`                                                                                 |
-| `compose.extraServices`               | none                                                | started and stopped with the database, e.g. `[mail]`                                             |
-| `database.user` / `password` / `name` | `name`                                              | `db psql`, the address, the database names of `checkout-env`                                     |
-| `server.project`                      | `directories.dotnet`                                | `server`: the folder of the server's `.csproj`                                                   |
-| `server.logFile`                      | `.artifacts/logs/server.jsonl`                      | `server` writes it, `logs` reads the newest `*.jsonl` of its folder                              |
-| `smoke.checks`                        | `/healthz` (`^ok`), `/api/health` (`"status":"ok"`) | `smoke`: a list of `{path, expect, hint}`; `expect` is a regular expression matched on some line |
-| `directories.web`                     | none                                                | `tmux`: the web app's folder, where `pnpm dev` runs                                              |
+| Key                                   | Default                                             | Used by                                                                                                                           |
+| :------------------------------------ | :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                | required                                            | the tmux session `<name>-dev`; the database user, password and name                                                               |
+| `portOffset`                          | `0`                                                 | added to every default port, so repositories on one machine do not collide                                                        |
+| `ports.server` / `web`                | `6300` / `3300` (+ offset)                          | the titles of the tmux panes                                                                                                      |
+| `ports.e2eServer` / `e2eWeb`          | `6301` / `3301` (+ offset)                          | `checkout-env`: the e2e ports of the main checkout                                                                                |
+| `ports.database`                      | `5533` (+ offset)                                   | the address `db up` prints, the test connection string of `checkout-env`                                                          |
+| `ports.stack`                         | `8190` (+ offset)                                   | `smoke`: the base url `http://127.0.0.1:<port>`                                                                                   |
+| `compose.file`                        | `compose.yaml`                                      | `db`, `logs --compose`                                                                                                            |
+| `compose.profile`                     | `db`                                                | the compose profile of the database                                                                                               |
+| `compose.databaseService`             | `db`                                                | the PostgreSQL service                                                                                                            |
+| `compose.serverService`               | `server`                                            | `logs --compose`                                                                                                                  |
+| `compose.extraServices`               | none                                                | started and stopped with the database, e.g. `[mail]`                                                                              |
+| `database.user` / `password` / `name` | `name`                                              | `db psql`, the address, the database names of `checkout-env`                                                                      |
+| `database.up`                         | the compose service                                 | `db up`, the `database-up` and `e2e` steps: a bash command, run in the root, that starts the database and returns once it answers |
+| `database.psql`                       | `docker compose exec`                               | `db psql`, the `e2e` step: a bash command that takes psql's arguments after it                                                    |
+| `server.project`                      | `directories.dotnet`                                | `server`: the folder of the server's `.csproj`                                                                                    |
+| `server.logFile`                      | `.artifacts/logs/server.jsonl`                      | `server` writes it, `logs` reads the newest `*.jsonl` of its folder                                                               |
+| `smoke.checks`                        | `/healthz` (`^ok`), `/api/health` (`"status":"ok"`) | `smoke`: a list of `{path, expect, hint}`; `expect` is a regular expression matched on some line                                  |
+| `directories.web`                     | none                                                | `tmux`: the web app's folder, where `pnpm dev` runs                                                                               |
 
 The port offset reproduces what the repositories did by hand: alfusion is `portOffset: 60` (6360, 3360, 5593, 8250), suwagcms 30
 and suwageval -70.
 
 ## What each command does
 
-- `db` runs `docker compose -f <file> --profile <profile>` on the database service (and `extraServices`). `up` starts it,
+- `db` runs `docker compose -f <file> --profile <profile>` on the database service (and `extraServices`). With
+  `database.up` and `database.psql`, `up` and `psql` run those commands instead (the output of `up` goes to stderr, the address
+  to stdout) and `down`, `reset`, `logs` and `status` refuse, naming them: they are the repository's own. `up` starts it,
   waits until it is healthy and prints `postgresql://user:password@localhost:<port>/<database>`. `down` stops it, the data stays
   in the volume. `reset` removes the containers and the volume after asking (`--yes` does not ask). `psql` runs psql as the owner
   in the app's database, with a terminal only when there is one, so `suwgate dev db psql -c "select 1"` works in scripts.
@@ -92,9 +96,9 @@ The template stays as it is until its own migration. Then:
 
 ## Not in it, on purpose
 
-- A database started with a plain `docker run` (suwagcms, suwageval) and its check that the container runs the pinned image: the
-  command works through the compose file only, where compose recreates a container whose image changed. A repository that wants
-  it adds a database service to its compose file.
+- Driving a database started with a plain `docker run` (suwagcms, suwageval, suwchatbot) beyond `up` and `psql`, and its check
+  that the container runs the pinned image: the repository names its own script in `database.up` and `database.psql` and keeps
+  the rest there, or adds a database service to its compose file, where compose recreates a container whose image changed.
 - The extra panes of suwageval (the example agent, a spare shell) and its `SUWAGEVAL_AGENT_DIR`: they are specific to that
   repository, which keeps them in its own script or recipe.
 - `init-project`, `e2e.sh`, `slow-tests.sh`: `init-project` stays in the template, the other two are other work packages.

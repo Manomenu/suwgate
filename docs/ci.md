@@ -3,11 +3,11 @@
 A repository calls these workflows instead of copying a `ci.yml`, so a pinned action, a tool version or a checksum changes in one place.
 They are `workflow_call` workflows in `.github/workflows/` of this repository.
 
-| Workflow            | Does                                                                                                                                                                                                            | Inputs                                                                                                                                                                        |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, the database (when asked), then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `database`, `oasdiff`, `failure-artifacts` |
-| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                             | `node-version`, `build-command`                                                                                                                                               |
-| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                     | `pack-target`                                                                                                                                                                 |
+| Workflow            | Does                                                                                                                                                                                                            | Inputs                                                                                                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, the database (when asked), then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `database`, `database-command`, `oasdiff`, `failure-artifacts` |
+| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                             | `node-version`, `build-command`                                                                                                                                                                   |
+| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                     | `pack-target`                                                                                                                                                                                     |
 
 Inputs exist only for what differs between repositories. Everything else (runner, timeouts, action pins, tool versions) is fixed here.
 
@@ -21,9 +21,11 @@ the full history.
 ## The database
 
 A job's `services` cannot be switched on by an input, so `gate.yml` starts the database the way a developer does: with
-`database: true` it runs `docker compose --profile db up -d --wait db` in the repository root before the gate (Docker is on the
-runner), the same compose service the `database-up` step starts locally and `suwgate dev db` drives. The `e2e` step then creates its
-own empty database in it. The image build stays in the repository's own `ci.yml`: it is project-specific.
+`database: true` it runs `database-command` in the repository root before the gate (Docker is on the runner). The default is
+`docker compose --profile db up -d --wait db`, the same compose service the `database-up` step starts locally and `suwgate dev db`
+drives; a repository whose database is its own script (`dev.database.up` in `suwgate.yml`) passes the same command, e.g.
+`database-command: scripts/.internal/db.sh up`. The `e2e` step then creates its own empty database in it. The image build stays in
+the repository's own `ci.yml`: it is project-specific.
 
 ## Full history for a NuGet release
 

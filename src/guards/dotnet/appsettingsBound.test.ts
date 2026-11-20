@@ -26,6 +26,36 @@ describe("appsettings-bound", () => {
         ).toEqual([]);
     });
 
+    it("passes a section read through a const string of an options class", async () => {
+        expect(
+            await appsettingsBound.check(
+                contextOf({
+                    "App/appsettings.json": JSON.stringify({ Invocation: {}, Judge: {}, Runs: {} }),
+                    "App/InvocationOptions.cs":
+                        'public sealed class InvocationOptions\n{\n    public const string Section = "Invocation";\n}',
+                    "App/JudgeOptions.cs": 'public sealed record JudgeOptions\n{\n    public const string Section = "Judge";\n}',
+                    "App/Runs.cs": 'sealed class RunOptions { internal const string Section = "Runs"; }',
+                    "App/Setup.cs": [
+                        "services.AddOptions<InvocationOptions>().BindConfiguration(InvocationOptions.Section);",
+                        "services.AddOptions<JudgeOptions>().Bind(configuration.GetSection(Judges.JudgeOptions.Section));",
+                        "services.AddOptions<RunOptions>().Bind(configuration.GetRequiredSection(RunOptions.Section));",
+                    ].join("\n"),
+                }),
+            ),
+        ).toEqual([]);
+    });
+
+    it("still finds a section whose constant no code binds", async () => {
+        const findings = await appsettingsBound.check(
+            contextOf({
+                "App/appsettings.json": JSON.stringify({ Mail: {} }),
+                "App/MailOptions.cs": 'public sealed class MailOptions { public const string Section = "Mail"; }',
+            }),
+        );
+
+        expect(findings.map((finding) => finding.target)).toEqual(["Mail"]);
+    });
+
     it("finds a section no code reads, in every appsettings file, with the fix", async () => {
         expect(
             await appsettingsBound.check(

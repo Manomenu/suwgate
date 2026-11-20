@@ -24,7 +24,7 @@ describe("dev settings", () => {
             serverService: "server",
             extraServices: [],
         });
-        expect(settings.database).toEqual({ user: "myapp", password: "myapp", name: "myapp" });
+        expect(settings.database).toEqual({ user: "myapp", password: "myapp", name: "myapp", up: null, psql: null });
         expect(settings.logFile).toBe(".artifacts/logs/server.jsonl");
         expect(settings.smokeChecks).toEqual(DEFAULT_SMOKE_CHECKS);
         expect(settings.serverProject).toBe("Myapp.Server");
@@ -51,7 +51,7 @@ describe("dev settings", () => {
         });
         expect(settings.compose.extraServices).toEqual(["mail"]);
         expect(settings.compose.file).toBe("docker/compose.yaml");
-        expect(settings.database).toEqual({ user: "u", password: "p", name: "d" });
+        expect(settings.database).toEqual({ user: "u", password: "p", name: "d", up: null, psql: null });
         expect(settings.serverProject).toBe("Other.Server");
         expect(settings.logFile).toBe("logs/s.jsonl");
     });

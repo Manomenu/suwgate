@@ -1,7 +1,7 @@
 import type { Guard } from "../../gate/contract.ts";
 import { inProfileDirectory, numberedLines, stringList } from "./text.ts";
 
-const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|oklab)\(|\[#/;
+const RAW_COLOR = /(?<!&)#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|oklab)\(|\[#/;
 const CODE_FILE = /\.(ts|tsx|js|jsx)$/;
 const TEST_FILE = /\.(test|spec|e2e)\.(ts|tsx|js|jsx)$/;
 

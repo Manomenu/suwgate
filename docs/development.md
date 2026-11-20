@@ -37,3 +37,9 @@ as a local source in that repository's `nuget.config`. Neither a `link:` nor a l
 
 The CLI: a changeset per change (the `changeset` step sees a new one only once git tracks it: `git add` it); on `master`, CI opens the "Version Packages" pull request, and after the owner merges it, publishes
 `@maniumek/suwgate` with npm trusted publishing (provenance included). The .NET packages are not published yet (TODO.md).
+
+## Merging a branch
+
+A branch is merged into `master` and then deleted, locally, on the remote and with its worktree. `gh pr merge --delete-branch`
+fails when `master` is checked out in another worktree (it switches the current checkout to `master` first): merge without
+`--delete-branch`, then `git push origin --delete <branch>`, `git worktree remove <path>` and `git branch -d <branch>`.

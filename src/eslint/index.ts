@@ -67,6 +67,10 @@ export function strict(options: StrictOptions): Linter.Config[] {
     );
 }
 
+function sourceProject(options: AppOptions): string {
+    return path.resolve(options.root, options.projects?.[0] ?? "./tsconfig.json");
+}
+
 function featureBoundaries(options: AppOptions): Linter.Config {
     const shared = options.shared ?? [];
     return {
@@ -75,7 +79,7 @@ function featureBoundaries(options: AppOptions): Linter.Config {
         settings: {
             "boundaries/root-path": options.root,
             "import/resolver": {
-                typescript: { project: (options.projects ?? ["./tsconfig.json"]).map((project) => path.resolve(options.root, project)) },
+                typescript: { project: sourceProject(options) },
                 node: { extensions: [".ts", ".tsx"] },
             },
             "boundaries/elements": [

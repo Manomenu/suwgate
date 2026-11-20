@@ -4,7 +4,7 @@ import type { PlannedStep } from "./plan.ts";
 import { runSteps } from "./runner.ts";
 
 function shell(id: string, line: string, extra: Partial<PlannedStep> = {}): PlannedStep {
-    return { id, title: id, after: [], limitSeconds: 30, command: { line, cwd: process.cwd() }, ...extra };
+    return { id, title: id, after: [], limitSeconds: 30, environment: [], command: { line, cwd: process.cwd() }, ...extra };
 }
 
 describe("the runner", () => {
@@ -52,6 +52,7 @@ describe("the runner", () => {
                     title: "skipped",
                     after: [],
                     limitSeconds: 5,
+                    environment: [],
                     skipped: { reason: "gitleaks not installed", byConfig: false },
                 },
                 shell("hung", "sleep 30", { limitSeconds: 1 }),

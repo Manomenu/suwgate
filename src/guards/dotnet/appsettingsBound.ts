@@ -6,6 +6,35 @@ const FRAMEWORK_SECTIONS = ["Logging", "AllowedHosts", "ConnectionStrings", "Kes
 const APPSETTINGS = /(^|\/)appsettings(\.[\w-]+)?\.json$/;
 const CSHARP = /\.cs$/;
 const SECTION_READ = /\b(?:BindConfiguration|GetSection|GetRequiredSection)\(\s*"([^":]+)/g;
+const SECTION_READ_BY_NAME = /\b(?:BindConfiguration|GetSection|GetRequiredSection)\(\s*([A-Za-z_][\w.]*)\s*\)/g;
+const TYPE_OR_CONSTANT = /\b(?:class|record|struct|interface)\s+(\w+)|\bconst\s+string\s+(\w+)\s*=\s*"([^":]+)"/g;
+
+function constants(text: string): Map<string, string> {
+    const found = new Map<string, string>();
+    let type = "";
+    for (const match of text.matchAll(TYPE_OR_CONSTANT)) {
+        if (match[1] !== undefined) {
+            type = match[1];
+        } else if (match[2] !== undefined && match[3] !== undefined) {
+            found.set(match[2], match[3]);
+            if (type !== "") found.set(`${type}.${match[2]}`, match[3]);
+        }
+    }
+    return found;
+}
+
+function sectionsRead(texts: readonly string[]): Set<string> {
+    const named = new Map(texts.flatMap((text) => [...constants(text)]));
+    return new Set(
+        texts.flatMap((text) => [
+            ...[...text.matchAll(SECTION_READ)].map((match) => match[1] ?? ""),
+            ...[...text.matchAll(SECTION_READ_BY_NAME)].flatMap((match) => {
+                const name = match[1] ?? "";
+                return named.get(name) ?? named.get(name.split(".").slice(-2).join(".")) ?? [];
+            }),
+        ]),
+    );
+}
 
 function sectionsOf(file: string, text: string): { sections: string[]; problem?: Finding } {
     try {
@@ -21,12 +50,11 @@ function sectionsOf(file: string, text: string): { sections: string[]; problem?:
 
 export const appsettingsBound: Guard = {
     id: "appsettings-bound",
-    description: "Every section of appsettings*.json is read by the code (an options class bound to it), so no setting is dead",
+    description:
+        "Every section of appsettings*.json is read by the code (an options class bound to it, by a string or a const string), so no setting is dead",
     profiles: ["dotnet"],
     check(context) {
-        const read = new Set(
-            dotnetFiles(context, CSHARP).flatMap((file) => [...context.read(file).matchAll(SECTION_READ)].map((match) => match[1] ?? "")),
-        );
+        const read = sectionsRead(dotnetFiles(context, CSHARP).map((file) => context.read(file)));
         const problems: Finding[] = [];
         const unread = new Map<string, string[]>();
         for (const file of dotnetFiles(context, APPSETTINGS)) {

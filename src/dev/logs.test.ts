@@ -60,6 +60,20 @@ describe("dev logs: one line each", () => {
         expect(text?.split(" | ")[1]).toHaveLength(200);
     });
 
+    it("finds the trace in the scopes, where the JSON console formatter of ASP.NET Core writes it", () => {
+        const scoped = JSON.stringify({
+            Timestamp: "2026-01-01T10:00:00Z",
+            LogLevel: "Warning",
+            Category: "App.Health",
+            Message: "m",
+            Scopes: [
+                { Message: `SpanId:b7ad6b7169203331, TraceId:${TRACE}`, SpanId: "b7ad6b7169203331", TraceId: TRACE },
+                { RequestPath: "/api/health" },
+            ],
+        });
+        expect(formatLine(scoped, { all: false, trace: "" })).toContain(`App.Health trace=${TRACE} m`);
+    });
+
     it("keeps a long message on one line, cut at 300 characters", () => {
         const text = formatLine(line({ LogLevel: "Error", Message: `a\n${"b".repeat(400)}` }), { all: false, trace: "" }) ?? "";
         expect(text).not.toContain("\n");

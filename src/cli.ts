@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-import { check } from "./gate/check.ts";
+import { check, step } from "./gate/check.ts";
 import { dev } from "./dev/index.ts";
 import { loadConfig, type Catalog } from "./gate/config.ts";
 import { PROFILES } from "./gate/contract.ts";
@@ -13,11 +13,16 @@ import { guardEdit, type EditHookProject, type EditHookSettings } from "./sessio
 import { preCommit, runTool } from "./session/preCommit.ts";
 import { stop } from "./session/stop.ts";
 
-const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate hook <guard-edit|stop|pre-commit> | suwgate dev <command> | suwgate --help | --version
+const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [--only] [--verbose] [-- <args>]] | suwgate hook <guard-edit|stop|pre-commit> | suwgate dev <command> | suwgate --help | --version
   suwgate check            every step of the repository's profiles (suwgate.yml) and the repository guards
   suwgate check --quick    the guards, and the quick steps only for what changed since master; has a time budget
                            (SUWGATE_QUICK_LIMIT seconds, default 20) because the Stop hook runs it after every turn
-  --verbose                list every step with its time, also when all pass
+  --verbose                list every step with its time, also when all pass, and the whole output of a failed step
+  suwgate step             the steps of this repository, with their titles and the tool that takes -- arguments
+  suwgate step <id>        one step and the steps it needs (after, transitively), with the same report; not a gate
+                           pass: the Stop hook does not count it. --only: that step alone. After --, arguments for the
+                           step's tool: suwgate step e2e -- --headed -g notes (Playwright), suwgate step unit-tests --
+                           -t "name" (Vitest), suwgate step dotnet-test -- --filter-method "*Notes*" (xUnit v3)
   suwgate hook guard-edit  Claude Code PreToolUse hook: refuses an agent's edit of the gate and of generated files
                            (ALLOW_GATE_EDIT=1 lifts the gate part for one session); only files of its own project
                            (CLAUDE_PROJECT_DIR, else the git checkout it runs in), with the lists of its profiles
@@ -53,8 +58,37 @@ function readInput(): string {
     }
 }
 
+async function runStep(argv: readonly string[]): Promise<number> {
+    const separator = argv.indexOf("--");
+    const own = separator === -1 ? argv : argv.slice(0, separator);
+    const args = separator === -1 ? [] : argv.slice(separator + 1);
+    if (own.includes("--help")) {
+        console.log(USAGE);
+        return 0;
+    }
+    const { values, positionals } = parseArgs({
+        args: [...own],
+        allowPositionals: true,
+        strict: true,
+        options: { only: { type: "boolean" }, verbose: { type: "boolean" } },
+    });
+    if (positionals.length > 1) throw new Error(`suwgate step takes one step id, not ${positionals.join(" ")}`);
+    const result = await step({
+        cwd: process.cwd(),
+        id: positionals[0],
+        only: values.only === true,
+        args,
+        verbose: values.verbose === true,
+        env: process.env,
+        catalog,
+    });
+    (result.exitCode === 0 ? console.log : console.error)(result.text);
+    return result.exitCode;
+}
+
 async function main(argv: readonly string[]): Promise<number> {
     if (argv[0] === "dev") return dev(argv.slice(1));
+    if (argv[0] === "step") return runStep(argv.slice(1));
     if (argv[0] === "verdict") {
         const result = verdict(argv.slice(1));
         if (result.text !== "") console.error(result.text);

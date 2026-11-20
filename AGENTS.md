@@ -13,6 +13,7 @@ every repository that installs them.
 - For people: a recipe in `justfile` with a one-line description; `just` lists them.
 - For agents: `node src/cli.ts check --quick` while working, `node src/cli.ts check` before calling a change done. Both
   run suwgate on itself, from the sources, with the profiles `library` and `dotnet` of `suwgate.yml`.
+- `node src/cli.ts step <id> [-- <args>]` runs one step with the steps it needs, e.g. `node src/cli.ts step unit-tests -- -t "name"`.
 - `node src/cli.ts --help` describes every command; `dotnet test` and `dotnet pack Suwgate.slnx -o .artifacts/nupkg` run the .NET side alone.
 
 ## Git

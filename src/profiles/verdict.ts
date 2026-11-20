@@ -17,7 +17,13 @@ const STRICT_FAMILY = [
 
 export function testsVerdict(format: ReportFormat, location: string, tool: string): string | null {
     const run = readRun(format, location);
-    if (run === null) return `${tool} wrote no report, so suwgate cannot tell that any test ran: run it again and look at its output above`;
+    if (run === null) {
+        const hint =
+            format === "playwright"
+                ? "; Playwright writes it when its reporters include json, which e2eTests() of @maniumek/suwgate/playwright adds: keep the config's reporter inside e2eTests(), and pass no --reporter after --"
+                : "";
+        return `${tool} wrote no report, so suwgate cannot tell that any test ran: run it again and look at its output above${hint}`;
+    }
     if (run.executed > 0) return null;
     return `${tool} ran 0 tests (every test skipped or filtered out, or none found), and a gate that ran nothing proves nothing: add a test that runs, or skip the step in suwgate.yml (steps.skip) with a reason`;
 }

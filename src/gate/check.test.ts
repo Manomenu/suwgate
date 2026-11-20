@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { check } from "./check.ts";
+import { check, step } from "./check.ts";
 import type { Catalog } from "./config.ts";
 import type { Guard, Step } from "./contract.ts";
 
@@ -183,5 +183,144 @@ describe("suwgate check", () => {
         const root = repository({});
 
         expect((await run(root)).text).toContain("no suwgate.yml in");
+    });
+});
+
+const toolSteps: readonly Step[] = [
+    { id: "install", title: "install", run: "echo installing" },
+    { id: "build", title: "build", run: "echo building", after: ["install"] },
+    { id: "full-test", title: "the whole suite", run: "echo every test" },
+    {
+        id: "e2e",
+        title: "browser tests",
+        run: 'echo "browser tests with: $*"; echo "SECRET=${MODELS__KEY:-cleared} E2E=${E2E_X:-unset} TOP=${TOP_X:-unset}"',
+        after: ["build"],
+        orderAfter: ["full-test"],
+        args: "playwright test",
+    },
+    { id: "lint", title: "lint", run: "echo linting" },
+];
+const toolCatalog: Catalog = { guards: [readme], dotnetGuards: [], stepsFor: () => [...toolSteps] };
+
+const runStep = (root: string, id: string | undefined, only = false, args: string[] = [], env: NodeJS.ProcessEnv = {}) =>
+    step({ cwd: root, id, only, args, verbose: true, env: { PATH: process.env["PATH"], ...env }, catalog: toolCatalog });
+
+describe("suwgate step", () => {
+    it("lists the steps of the plan with their titles, the tool that takes arguments and the skips", async () => {
+        const root = repository({ "suwgate.yml": "profiles: [web]\nsteps:\n  skip:\n    - { step: lint, reason: no sources yet }\n" });
+
+        const result = await runStep(root, undefined);
+
+        expect(result.exitCode).toBe(0);
+        expect(result.text.split("\n")).toEqual([
+            "usage: suwgate step <id> [--only] [--verbose] [-- <arguments for the step's tool>]; the steps of this repository:",
+            "  guards     repository guards (1)",
+            "  install    install",
+            "  build      build",
+            "  full-test  the whole suite",
+            "  e2e        browser tests [-- args: playwright test]",
+            "  lint       lint [skipped in suwgate.yml: no sources yet]",
+        ]);
+    });
+
+    it("runs a step with the steps it needs, not those it only waits for, and hands it the arguments after --", async () => {
+        const root = repository({ "suwgate.yml": "profiles: [web]\n", "README.md": "" });
+
+        const result = await runStep(root, "e2e", false, ["--headed", "-g", "two words"]);
+
+        expect(result.exitCode).toBe(0);
+        expect(result.text).toContain("PASS");
+        expect(result.text.split("\n").filter((line) => /^\s+PASS\s+\d+s/.test(line))).toEqual([
+            expect.stringContaining("install"),
+            expect.stringContaining("build"),
+            expect.stringContaining("browser tests"),
+        ]);
+        expect(result.text).toMatch(/PASS suwgate step e2e: 3 passed/);
+    });
+
+    it("runs the step alone with --only, and a step suwgate.yml skips when it is asked for by name", async () => {
+        const root = repository({ "suwgate.yml": "profiles: [web]\nsteps:\n  skip:\n    - { step: lint, reason: no sources yet }\n" });
+
+        expect((await runStep(root, "e2e", true)).text).toMatch(/PASS suwgate step e2e --only: 1 passed/);
+        expect((await runStep(root, "lint", true)).text).toMatch(/PASS\s+\d+s\s+lint/);
+    });
+
+    it("shows the output of a failed step with its arguments, and refuses arguments for a step that takes none", async () => {
+        const root = repository({
+            "suwgate.yml": "profiles: [web]\nsteps:\n  add:\n    - { name: fails, run: 'echo \"got $*\"; exit 1' }\n",
+        });
+
+        const refused = await runStep(root, "lint", true, ["--fix"]);
+        const unknown = await runStep(root, "nope");
+
+        expect(refused).toEqual({
+            exitCode: 2,
+            text: 'suwgate step lint: the step lint passes no arguments to a tool, so it refuses "-- --fix"; the steps that take them: e2e (playwright test)',
+        });
+        expect(unknown.exitCode).toBe(2);
+        expect(unknown.text).toContain('suwgate step nope: this repository has no step "nope"');
+        expect((await runStep(root, "fails", true)).exitCode).toBe(1);
+    });
+
+    it("clears the variables unset names, without regard to case, and sets env, the step's own over the top-level", async () => {
+        const root = repository({
+            "suwgate.yml": [
+                "profiles: [web]",
+                "env: { TOP_X: top, E2E_X: top }",
+                "unset: [models__*]",
+                "steps:",
+                "  configure:",
+                "    e2e:",
+                "      env: { E2E_X: own }",
+                "      limitSeconds: 5",
+            ].join("\n"),
+        });
+
+        const result = await step({
+            cwd: root,
+            id: "e2e",
+            only: true,
+            args: [],
+            verbose: true,
+            env: { PATH: process.env["PATH"], MODELS__KEY: "real" },
+            catalog: {
+                ...toolCatalog,
+                stepsFor: () => toolSteps.map((each) => (each.id === "e2e" ? { ...each, run: `${String(each.run)}; exit 1` } : each)),
+            },
+        });
+
+        expect(result.text).toContain("SECRET=cleared E2E=own TOP=top");
+    });
+});
+
+describe("one-time exceptions", () => {
+    it("hold on the branch that adds them, and after the merge except nothing, never go stale and ask to be deleted", async () => {
+        const config = [
+            "profiles: [web]",
+            "exceptions:",
+            "  - { guard: has-readme, target: README.md, once: true, reason: the owner approved it }",
+        ].join("\n");
+        const root = repository({ "suwgate.yml": "profiles: [web]\n" });
+        const git = (...args: string[]) =>
+            execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: root, stdio: "ignore" });
+        git("add", ".");
+        git("commit", "-q", "-m", "base");
+        git("checkout", "-q", "-b", "feature/x");
+        writeFileSync(path.join(root, "suwgate.yml"), config);
+
+        const onTheBranch = await run(root);
+        git("add", ".");
+        git("commit", "-q", "-m", "approved");
+        git("checkout", "-q", "master");
+        git("merge", "-q", "--no-ff", "feature/x");
+        const afterTheMerge = await run(root);
+        writeFileSync(path.join(root, "README.md"), "");
+        const readmeAdded = await run(root);
+
+        expect(onTheBranch.exitCode).toBe(0);
+        expect(afterTheMerge.exitCode).toBe(1);
+        expect(afterTheMerge.text).toContain("has-readme: README.md: missing: add it");
+        expect(readmeAdded.exitCode).toBe(0);
+        expect(readmeAdded.text).toContain("1 one-time exception is on master now: delete it");
     });
 });
