@@ -1,9 +1,19 @@
 import type { Step } from "../gate/contract.ts";
+import { criteriaStep } from "./criteria.ts";
+import { composeFile } from "./database.ts";
 import { withChanged } from "./shell.ts";
 
 const SHELL_SCRIPT = /\.sh$|^\.githooks\/[^/]+$/;
 
 export const everyRepositorySteps: readonly Step[] = [
+    {
+        id: "compose",
+        title: "the compose stack resolves, with and without the db profile (docker compose config)",
+        needs: ["docker"],
+        run: (context) => (composeFile(context) ? "docker compose config --quiet && docker compose --profile db config --quiet" : null),
+        limitSeconds: 120,
+    },
+    criteriaStep,
     {
         id: "shellcheck",
         title: "shell scripts (shellcheck)",

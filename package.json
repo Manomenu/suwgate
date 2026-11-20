@@ -12,6 +12,28 @@
     "bin": {
         "suwgate": "dist/cli.js"
     },
+    "exports": {
+        "./package.json": "./package.json",
+        "./prettier": {
+            "types": "./dist/profiles/presets/prettier.d.ts",
+            "default": "./dist/profiles/presets/prettier.js"
+        },
+        "./knip": {
+            "types": "./dist/profiles/presets/knip.d.ts",
+            "default": "./dist/profiles/presets/knip.js"
+        },
+        "./vitest": {
+            "types": "./dist/profiles/presets/vitest.d.ts",
+            "default": "./dist/profiles/presets/vitest.js"
+        },
+        "./playwright": {
+            "types": "./dist/profiles/presets/playwright.d.ts",
+            "default": "./dist/profiles/presets/playwright.js"
+        },
+        "./tsconfig/strict": "./dist/profiles/presets/tsconfig/strict.json",
+        "./tsconfig/browser": "./dist/profiles/presets/tsconfig/browser.json",
+        "./tsconfig/node": "./dist/profiles/presets/tsconfig/node.json"
+    },
     "files": [
         "dist",
         "schema"
@@ -21,7 +43,7 @@
     },
     "packageManager": "pnpm@11.24.0",
     "scripts": {
-        "build": "rm -rf dist && tsc -p tsconfig.build.json",
+        "build": "rm -rf dist && tsc -p tsconfig.build.json && cp -r src/profiles/presets/tsconfig dist/profiles/presets/",
         "changeset": "changeset",
         "release": "pnpm run build && changeset publish",
         "prepack": "pnpm run build"

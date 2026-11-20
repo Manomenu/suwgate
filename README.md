@@ -30,8 +30,7 @@ exceptions:
       reason: the payment SDK takes an implementation of this interface; the second one is the SDK's test double
 ```
 
-- `profiles` (`web`, `library`, `dotnet`, `database`) bring their default steps in their order: build, tests, lint, typecheck,
-  format, knip, the package checks of a library, shellcheck, gitleaks. A web-only repository runs nothing of .NET; the database
+- `profiles` (`web`, `library`, `dotnet`, `database`) bring their default steps in their order (the table below). A web-only repository runs nothing of .NET; the database
   guards run only with `database`.
 - `steps.add` runs more (`name`, `run`, optionally `title`, `quick`, `after`, `limitSeconds`); `steps.skip` leaves a step out,
   always with a `reason`.
@@ -41,6 +40,54 @@ exceptions:
   `"yaml.schemas": { "./node_modules/@maniumek/suwgate/schema/suwgate.schema.json": "suwgate.yml" }` in `.vscode/settings.json`.
 - An agent cannot edit `suwgate.yml`: `suwgate hook guard-edit` (a Claude Code PreToolUse hook) refuses it, as it refuses the
   other files of the gate, until the owner starts a session with `ALLOW_GATE_EDIT=1`.
+
+### The steps of the profiles
+
+Each step looks where its profile lives (`directories`) and passes with nothing to check when the repository has nothing for it.
+
+| Profile          | Steps                                                                                                                                                                                                                                                                                                                                                                                                    |
+| :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web`, `library` | `pnpm-install` (only without `node_modules`), `typecheck` (every `tsconfig*.json` but `tsconfig.build.json`), `lint`, `unit-tests` (the Vitest project `unit` when the config names one), `format`, `knip`                                                                                                                                                                                               |
+| `web`            | `e2e`: `playwright test -c e2e/playwright.config.ts`, after the build, the database and the .NET tests                                                                                                                                                                                                                                                                                                   |
+| `library`        | `stories` (with `.storybook/`), `publint`, `attw`, `consumer-app` (packs the library into a copy of `gate/consumer/app`, builds it, runs `gate/consumer/playwright.config.ts`), `visual` (`visual/playwright.config.ts` in the Playwright image of the installed `@playwright/test`), `changeset`                                                                                                        |
+| `dotnet`         | `dotnet-build`, `dotnet-format`, `dotnet-test` (`--quick`: only the test projects that use `Suwgate.Architecture` or `Suwgate.Database`)                                                                                                                                                                                                                                                                 |
+| `dotnet`, `web`  | with `contract/openapi.json`: `api-contract` (the contract and `src/api/openapi.d.ts` of the web app regenerated from the server's project, the one that references `Microsoft.Extensions.ApiDescription.Server`), `api-version` (oasdiff against master; a break needs a new major version in `contract/package.json`), `contract-pins` (every test tagged `contract <name>@<version>` names a version) |
+| `database`       | `database-up`: `docker compose --profile db up -d --wait db`, not in CI                                                                                                                                                                                                                                                                                                                                  |
+| every repository | `compose` (with a compose file), `criteria`, `shellcheck`, `gitleaks`                                                                                                                                                                                                                                                                                                                                    |
+
+`criteria` runs `vdoc.py criteria` of the suwagent plugin, pinned by commit and SHA-256: every acceptance criterion of the specs in
+`docs/visual/spec/` is named by a guardrail. The kinds of guardrail come with the profiles; `criteria.json` in the repository root
+adds the repository's own (`{ "kinds": [{ "kind", "paths", "how" }] }`, optionally `specs` and `prose`), and the guard
+`criteria-kinds` asks for a row of each in a table of `README.md` or `docs/development.md`. The default kinds:
+
+| Kind                            | Profile          | Where (in the profile's directory)  | How the id is written                      |
+| :------------------------------ | :--------------- | :---------------------------------- | :----------------------------------------- |
+| `test (xunit)`                  | `dotnet`         | every project that references xunit | `[Trait("criterion", "<id>")]` on the test |
+| `lint (.NET analyzer)`          | `dotnet`         | `.editorconfig`                     | `# <id>` on its own line above the rule    |
+| `banned API`                    | `dotnet`         | `BannedSymbols.txt`                 | in the message: `P:…;<id> use …`           |
+| `build rule`                    | `dotnet`         | `Directory.Build.props`             | `<!-- <id> -->` above the property         |
+| `e2e test (playwright)`         | `web`            | `src/**/*.e2e.ts`                   | in the title: `test("<id>: …")`            |
+| `web test (vitest)`             | `web`            | `src/**/*.test.ts(x)`               | in the title: `it("<id>: …")`              |
+| `unit test (vitest)`            | `library`        | `src/**/*.test.ts(x)`               | in the title: `it("<id>: …")`              |
+| `story test (vitest, Chromium)` | `library`        | `src/**/*.stories.tsx`              | in the story's name: `name: "<id>: …"`     |
+| `visual test (playwright)`      | `library`        | `visual/*.visual.ts`                | in the title: `test("<id>: …")`            |
+| `consumer test (playwright)`    | `library`        | `gate/consumer/*.spec.ts`           | in the title: `test("<id>: …")`            |
+| `lint (eslint)`                 | `web`, `library` | `eslint.config.js`                  | `// <id>` on the line above the rule       |
+| `type check (tsc)`              | `web`, `library` | `tsconfig*.json`                    | `// <id>` on the line above the option     |
+
+### The tool presets
+
+The configs of the tools the steps run extend suwgate's, so an application keeps only its own paths:
+
+| Tool       | The application's file                                                                                                                                                                                     |
+| :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prettier   | `.prettierrc.json`: `"@maniumek/suwgate/prettier"` (with a plugin: spread it in `prettier.config.js`)                                                                                                      |
+| TypeScript | `{ "extends": "@maniumek/suwgate/tsconfig/browser", "include": ["src"] }`; `tsconfig/node` for the configs, scripts and tests run by Node; `tsconfig/strict` for the options alone                         |
+| knip       | `knip.config.ts`: `export { default } from "@maniumek/suwgate/knip"`, or `knip({ entry: [...] })`; it ignores the tools the steps run and the generated API types, and reads the steps' Playwright configs |
+| Vitest     | `unitTests({ environment: "jsdom" })` and `storyTests({ plugin, provider })` from `@maniumek/suwgate/vitest`: the projects `unit` and `stories` the steps run                                              |
+| Playwright | `defineConfig(e2eTests({ use: { baseURL }, webServer }))` or `defineConfig(visualTests())` from `@maniumek/suwgate/playwright`                                                                             |
+
+### The .NET guards
 
 In the xUnit tests of a .NET application:
 

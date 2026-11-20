@@ -5,10 +5,6 @@
 - Reusable CI workflows (GitHub Actions `workflow_call` workflows or composite actions) that the repositories call instead of each
   copying its own ci.yml, so a pinned action, a tool version or a checksum changes in one place. Do it with the migration of the
   template, suwfrontkit and suwstockdrill to suwgate, when their CI is rewritten anyway.
-- Contract checks as profile steps: the API contract is up to date with the server, it changes in a breaking way only with a new
-  major version, and the TypeScript types match it (today the template's api-diff and contracts scripts, run by its gate). The core
-  can already run them as steps; what is missing are the steps themselves and the profile that brings them (work package C of
-  the inventory). The runtime halves (generating the contract and the types) stay in the kits.
 - Suwgate.Testing (NuGet): a PostgreSQL Testcontainers fixture, helpers for characterization tests and for e2e tests with
   Playwright, so that every backend tests against a real database the same way instead of copying the template's test database
   code. Do it after the backend inventory, which decides what of it belongs to suwbackkit instead.
@@ -21,5 +17,3 @@
   pinned version in `suwgate.yml`. Decide before the first such repository switches.
 - Publish `Suwgate.Architecture` and `Suwgate.Database` to nuget.org (trusted publishing from CI), after the first application uses
   them from the packages `just pack` builds.
-- Acceptance criteria (the template's criteria script with the pinned vdoc.py) as a step of every profile, once suwgate has its
-  first spec.
