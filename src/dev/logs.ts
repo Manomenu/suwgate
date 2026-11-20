@@ -70,6 +70,15 @@ function field(record: Record<string, unknown>, name: string): string {
     return typeof value === "string" ? value : "";
 }
 
+function traceIdOf(record: Record<string, unknown>): string {
+    const scopes = Array.isArray(record["Scopes"]) ? (record["Scopes"] as unknown[]) : [];
+    const inScope = scopes
+        .filter((scope): scope is Record<string, unknown> => typeof scope === "object" && scope !== null)
+        .map((scope) => field(scope, "TraceId"))
+        .find((traceId) => traceId !== "");
+    return field(record, "TraceId") || (inScope ?? "");
+}
+
 function oneLine(value: string): string {
     return value.replace(/\s*[\r\n]+\s*/g, " ");
 }
@@ -85,7 +94,7 @@ export function formatLine(line: string, command: Pick<LogsCommand, "all" | "tra
     const level = field(record, "LogLevel");
     if (command.trace !== "" && !line.includes(command.trace)) return null;
     if (!command.all && !SHOWN_LEVELS.includes(level)) return null;
-    const traceId = field(record, "TraceId");
+    const traceId = traceIdOf(record);
     const exception = field(record, "Exception").split(/[\r\n]/, 1)[0] ?? "";
     const shownException = exception === "" ? "" : ` | ${exception.slice(0, EXCEPTION_LIMIT)}`;
     const shownTrace = traceId === "" ? "" : ` trace=${traceId}`;
