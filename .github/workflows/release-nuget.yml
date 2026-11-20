@@ -1,0 +1,40 @@
+name: release-nuget
+
+on:
+  workflow_call:
+    inputs:
+      pack-target:
+        description: Solution or project to pack, empty for the one in the repository root
+        type: string
+        default: ""
+    outputs:
+      artifact-name:
+        value: nupkg
+
+permissions: {}
+
+jobs:
+  pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: actions/setup-dotnet v6.0.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Pack
+        env:
+          PACK_TARGET: ${{ inputs.pack-target }}
+        run: dotnet pack ${PACK_TARGET:+"$PACK_TARGET"} --configuration Release --output .artifacts/nupkg
+      - name: Keep the packages (actions/upload-artifact v7.0.2)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: nupkg
+          path: .artifacts/nupkg/*.nupkg
+          if-no-files-found: error
