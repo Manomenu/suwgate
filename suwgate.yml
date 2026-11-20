@@ -53,6 +53,13 @@ exceptions:
   - guard: config-contents
     target: .github/workflows
     reason: ci.yml calls the gate workflow of this same repository, ./.github/workflows/gate.yml, which runs at the caller's commit; a pin by sha would test an older gate
+  - guard: test-timing
+    target: src/guards/repository/hooks.test.ts
+    message: "timeout:"
+    reason: the timeout is a field of the Claude Code hooks settings the test builds as data, not a limit on the test
+  - guard: test-timing
+    target: src/guards/repository/testTiming.test.ts
+    reason: the guard's own examples, the calls it must find, are strings of its test
 settings:
   docs-paths:
     ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/]

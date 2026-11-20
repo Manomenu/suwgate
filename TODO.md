@@ -25,4 +25,3 @@
 - `dependency-direction`: a runtime check of the shipped `.csproj` files of a `dotnet` library that honours `PrivateAssets="all"`.
 - Guard candidates:
     - `criterion-per-test`: every test of system logic names a criterion; the meta places (guards, fixtures) as a setting.
-    - `human-docs`: the README and the development docs never tell a person to run a script that is meant for agents (the internal scripts folder).

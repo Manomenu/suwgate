@@ -7,6 +7,7 @@ import { dependencyDirection } from "./dependencyDirection.ts";
 import { docsPaths } from "./docsPaths.ts";
 import { forbiddenNames } from "./forbiddenNames.ts";
 import { hooks } from "./hooks.ts";
+import { humanDocs } from "./humanDocs.ts";
 import { imagePins } from "./imagePins.ts";
 import { justModules } from "./justModules.ts";
 import { noRawColors } from "./noRawColors.ts";
@@ -15,6 +16,7 @@ import { requiredFiles } from "./requiredFiles.ts";
 import { scriptsCalled } from "./scriptsCalled.ts";
 import { scriptsHelp } from "./scriptsHelp.ts";
 import { suwfrontkitWiring } from "./suwfrontkitWiring.ts";
+import { testTiming } from "./testTiming.ts";
 import { vsCodeSettings } from "./vsCodeSettings.ts";
 
 export const repositoryGuards: readonly Guard[] = [
@@ -35,4 +37,6 @@ export const repositoryGuards: readonly Guard[] = [
     dependencyDirection,
     hooks,
     suwfrontkitWiring,
+    testTiming,
+    humanDocs,
 ];

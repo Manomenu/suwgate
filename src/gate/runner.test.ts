@@ -1,3 +1,7 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { PlannedStep } from "./plan.ts";
@@ -9,14 +13,14 @@ function shell(id: string, line: string, extra: Partial<PlannedStep> = {}): Plan
 
 describe("the runner", () => {
     it("runs independent steps at the same time and keeps the declared order in the results", async () => {
-        const began = performance.now();
+        const meeting = (own: string) =>
+            `touch "$MEETING/${own}"; until [ -e "$MEETING/a" ] && [ -e "$MEETING/b" ] && [ -e "$MEETING/c" ]; do sleep 0.05; done; echo ${own}`;
         const results = await runSteps(
-            [shell("a", "sleep 1; echo a"), shell("b", "sleep 1; echo b"), shell("c", "sleep 1; echo c")],
-            process.env,
+            ["a", "b", "c"].map((id) => shell(id, meeting(id), { limitSeconds: 10 })),
+            { ...process.env, MEETING: mkdtempSync(path.join(tmpdir(), "suwgate-runner-")) },
             null,
         );
 
-        expect(performance.now() - began).toBeLessThan(2500);
         expect(results.map((result) => [result.step.id, result.status, result.log.trim()])).toEqual([
             ["a", "pass", "a"],
             ["b", "pass", "b"],
