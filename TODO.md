@@ -15,3 +15,17 @@
   pinned version in `suwgate.yml`. Decide before the first such repository switches.
 - The first release of the CLI and of `Suwgate.Architecture` and `Suwgate.Database`: [docs/first-release.md](docs/first-release.md). The
   NuGet publish job is wired and waits for the owner's account, policy and tag.
+- `suwgate criteria [id]` and `suwgate contracts [name@version]`: lookups of where a criterion is guarded and which tests pin a
+  contract version, so nobody greps for them.
+- A command that re-records the visual snapshots (the `visual` step's Playwright image with `--update-snapshots`).
+- The `consumer-app` step for a library with several consumer apps.
+- The browser-storage ban of `app()` as its own ESLint export, so a repository that is not an app can use it alone.
+- An override of the reporter of `e2eTests()` (the Playwright preset).
+- `Suwgate.Architecture` `architecture/layers`: guard the order of features inside a product area (nested namespaces), not only the
+  top-level layers.
+- `dependency-direction`: a runtime check of the shipped `.csproj` files of a `dotnet` library that honours `PrivateAssets="all"`.
+- Guard candidates:
+    - `criterion-per-test`: every test of system logic names a criterion; the meta places (guards, fixtures) as a setting.
+    - `folder-size`: at most N files per code folder.
+    - `human-docs`: the README and the development docs never tell a person to run a script that is meant for agents (the internal scripts folder).
+    - no real personal data in the seed files `settings` names.

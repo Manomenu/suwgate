@@ -22,6 +22,10 @@ on:
         description: Command that installs the browser for the tests, empty for none
         type: string
         default: ""
+      database:
+        description: Start the compose service db of the profile db (docker compose --profile db up -d --wait db) before the gate
+        type: boolean
+        default: false
       oasdiff:
         description: Install oasdiff next to gitleaks and shellcheck
         type: boolean
@@ -92,6 +96,9 @@ jobs:
           echo "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140  oasdiff.tar.gz" | sha256sum --check
           tar -xzf oasdiff.tar.gz oasdiff
           sudo install oasdiff /usr/local/bin/oasdiff
+      - name: The database of the tests (the compose service db)
+        if: inputs.database
+        run: docker compose --profile db up -d --wait db
       - name: The gate
         run: ${{ inputs.command }}
       - name: Keep the failure files (actions/upload-artifact v7.0.2)

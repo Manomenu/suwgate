@@ -1,8 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { parse as parseYaml } from "yaml";
 
 import type { StepContext } from "../gate/contract.ts";
+
+const HERE = fileURLToPath(import.meta.url);
+
+const CLI = path.join(path.dirname(HERE), "..", `cli${path.extname(HERE)}`);
 
 export function quoted(argument: string): string {
     return `'${argument.replaceAll("'", `'"'"'`)}'`;
@@ -68,3 +75,18 @@ export function onPath(tool: string): boolean {
         }
     });
 }
+
+export function suwgate(args: string): string {
+    return `${quoted(process.execPath)} ${quoted(CLI)} ${args}`;
+}
+
+export function hasDevSection(context: StepContext): boolean {
+    try {
+        const parsed: unknown = parseYaml(readFileSync(path.join(context.root, "suwgate.yml"), "utf8"));
+        return typeof parsed === "object" && parsed !== null && "dev" in parsed;
+    } catch {
+        return false;
+    }
+}
+
+export const CHECKOUT_ENV = [`variables="$(${suwgate("dev checkout-env")})"`, 'eval "$variables"'];

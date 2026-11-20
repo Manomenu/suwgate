@@ -8,9 +8,27 @@ import { numberedLines } from "./text.ts";
 const MAP = "docs/architecture.md";
 export const MAX_MAP_LINE_LENGTH = 300;
 const MAP_ENTRY = /^- `([^`]+)`/;
+const MAP_HEADING = "## The map";
+
+function mapSection(text: string): { line: number; text: string }[] | null {
+    const lines = numberedLines(text);
+    const start = lines.findIndex(({ text: line }) => line.trim() === MAP_HEADING);
+    if (start === -1) return null;
+    const end = lines.findIndex(({ text: line }, index) => index > start && /^#{1,2} /.test(line));
+    return lines.slice(start + 1, end === -1 ? undefined : end);
+}
 
 function mapFindings(context: GuardContext): Finding[] {
-    const entries = numberedLines(context.read(MAP)).filter(({ text }) => MAP_ENTRY.test(text));
+    const section = mapSection(context.read(MAP));
+    if (section === null) {
+        return [
+            {
+                target: MAP,
+                message: `no "${MAP_HEADING}" section: add it, with one line per top-level folder (- \`folder/\` — what it holds)`,
+            },
+        ];
+    }
+    const entries = section.filter(({ text }) => MAP_ENTRY.test(text));
     const folders = new Set(context.files.filter((file) => file.includes("/")).map((file) => file.split("/")[0] ?? ""));
     const described = new Map(entries.map(({ line, text }) => [(MAP_ENTRY.exec(text)?.[1] ?? "").split("/")[0] ?? "", line]));
     const missing = [...folders]
@@ -70,7 +88,7 @@ function notExecutable(root: string): Finding[] {
 export const repositoryLayout: Guard = {
     id: "repository-layout",
     description:
-        "Every top-level folder has a short line in the map of docs/architecture.md, no two files differ only in letter case, and every shell script is executable in git",
+        "Every top-level folder has a short line in the map (the section ## The map) of docs/architecture.md, no two files differ only in letter case, and every shell script is executable in git",
     profiles: "every",
     check(context) {
         return [

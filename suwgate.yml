@@ -15,7 +15,7 @@ exceptions:
     reason: the .NET projects of suwgate are guard packages, not a layered server, so there are no layers to describe
   - guard: docs-paths
     target: docs/inventory.md
-    reason: the inventory names files of the template and of suwfrontkit, and .NET guard ids such as architecture/layers, none of which are paths of suwgate
+    reason: the inventory names files of the template and of suwfrontkit, which are not paths of suwgate
   - guard: docs-paths
     target: docs/dev.md
     reason: the dev guide maps the template's dev scripts (db.sh, logs.sh, server.sh and the rest) onto suwgate dev, so it names files of the consuming repositories
@@ -25,8 +25,26 @@ exceptions:
   - guard: docs-paths
     target: README.md
     reason: the README is the user guide of the package, so it names files of the consuming repositories (contract/openapi.json, knip.config.ts, criteria.json) and preset entry points such as tsconfig/strict
+  - guard: config-contents
+    target: tsconfig.json
+    reason: suwgate is where the tsconfig presets come from and does not install itself, so its own tsconfig cannot extend @maniumek/suwgate/tsconfig
+  - guard: config-contents
+    target: eslint.config.js
+    reason: suwgate builds its eslint config from strict() of its own sources (src/eslint/index.ts), the code @maniumek/suwgate/eslint ships
+  - guard: config-contents
+    target: .prettierrc.json
+    reason: suwgate does not install itself, so it cannot name the package's prettier preset; its .prettierrc.json holds the same options
+  - guard: config-contents
+    target: vitest.config.ts
+    reason: suwgate does not install itself, and its tests are one Node project, not the unit and stories projects of an app
+  - guard: config-contents
+    target: .vscode/settings.json
+    reason: VS Code reads suwgate's schema from its source, schema/suwgate.schema.json, since suwgate does not install itself
+  - guard: config-contents
+    target: .github/workflows
+    reason: ci.yml calls the gate workflow of this same repository, ./.github/workflows/gate.yml, which runs at the caller's commit; a pin by sha would test an older gate
 settings:
   docs-paths:
-    ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/, architecture/, database/]
+    ignore: [NNNN-what-was-decided.md, NNNN_snake_case.sql, .artifacts/]
   dependency-direction:
     forbidden: ["@maniumek/suwfrontkit", "Suwbackkit.*"]

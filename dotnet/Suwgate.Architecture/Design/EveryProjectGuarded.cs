@@ -8,6 +8,8 @@ public sealed class EveryProjectGuarded(LayersFile layers, params Assembly[] ass
 {
     public const string GuardId = "architecture/every-project-guarded";
 
+    private static readonly string[] GuardPackages = ["Suwgate.Architecture", "Suwgate.Database"];
+
     public string Id => GuardId;
 
     public IEnumerable<Finding> Check()
@@ -15,7 +17,7 @@ public sealed class EveryProjectGuarded(LayersFile layers, params Assembly[] ass
         ArgumentNullException.ThrowIfNull(layers);
         var read = assemblies.Select(assembly => assembly.GetName().Name).ToHashSet(StringComparer.Ordinal);
         var production = layers
-            .Projects.Where(project => !project.Key.EndsWith(".Tests", StringComparison.Ordinal))
+            .Projects.Where(project => !project.Key.EndsWith(".Tests", StringComparison.Ordinal) && !IsGate(project.Key))
             .OrderBy(project => project.Key, StringComparer.Ordinal)
             .ToList();
         var unread = production
@@ -31,5 +33,20 @@ public sealed class EveryProjectGuarded(LayersFile layers, params Assembly[] ass
                 $"it has no layers: give it \"layers\" in {layers.Path}, top to bottom, so that the layers guard checks it"
             ));
         return [.. unread, .. unlayered];
+    }
+
+    private static bool IsGate(string project)
+    {
+        try
+        {
+            return Assembly
+                .Load(new AssemblyName(project))
+                .GetReferencedAssemblies()
+                .Any(reference => GuardPackages.Contains(reference.Name, StringComparer.Ordinal));
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
     }
 }

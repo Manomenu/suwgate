@@ -3,11 +3,11 @@
 A repository calls these workflows instead of copying a `ci.yml`, so a pinned action, a tool version or a checksum changes in one place.
 They are `workflow_call` workflows in `.github/workflows/` of this repository.
 
-| Workflow            | Does                                                                                                                                                                                 | Inputs                                                                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `oasdiff`, `failure-artifacts` |
-| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                  | `node-version`, `build-command`                                                                                                                                   |
-| `release-nuget.yml` | `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                                   | `pack-target`                                                                                                                                                     |
+| Workflow            | Does                                                                                                                                                                                                            | Inputs                                                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gate.yml`          | checkout, pnpm, Node, .NET (when asked), the browser (when asked), gitleaks and shellcheck with checksums, the database (when asked), then the gate; on failure keeps `gate-failure` (visual diffs, e2e report) | `command` (default `pnpm exec suwgate check --verbose`), `node-version`, `working-directory`, `dotnet`, `browser-install-command`, `database`, `oasdiff`, `failure-artifacts` |
+| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                             | `node-version`, `build-command`                                                                                                                                               |
+| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                     | `pack-target`                                                                                                                                                                 |
 
 Inputs exist only for what differs between repositories. Everything else (runner, timeouts, action pins, tool versions) is fixed here.
 
@@ -18,11 +18,17 @@ master (`migrations-unchanged`, the changed-files steps) pass silently when ther
 them check nothing in CI. A caller must not replace this checkout, and a repository that copies the gate into its own workflow must keep
 the full history.
 
-## What a workflow in the same repository cannot do
+## The database
 
-`gate.yml` has no database service: a job's `services` cannot be switched on by an input. A repository whose tests need PostgreSQL
-runs its tests against Testcontainers (Docker is on the runner), or keeps that job in its own `ci.yml`. The template's e2e job and
-image build stay in the template for the same reason: they are project-specific.
+A job's `services` cannot be switched on by an input, so `gate.yml` starts the database the way a developer does: with
+`database: true` it runs `docker compose --profile db up -d --wait db` in the repository root before the gate (Docker is on the
+runner), the same compose service the `database-up` step starts locally and `suwgate dev db` drives. The `e2e` step then creates its
+own empty database in it. The image build stays in the repository's own `ci.yml`: it is project-specific.
+
+## Full history for a NuGet release
+
+`release-nuget.yml` checks out with `fetch-depth: 0` as well (actions/checkout: "0 indicates all history for all branches and tags"),
+so a version read from git tags, such as MinVer's in suwbackkit, is the tag's and never the shallow clone's `0.0.0-alpha.0`.
 
 ## Trusted publishing inside a reusable workflow
 
@@ -54,7 +60,7 @@ a secret (both registries use OIDC). Callers set `permissions` per job: `content
 
 ## Callers
 
-The gate (a repository with Playwright and .NET):
+The gate (a repository with Playwright, .NET and PostgreSQL; the `config-contents` guard asks for this call, pinned by the full sha):
 
 ```yaml
 jobs:
@@ -64,6 +70,7 @@ jobs:
         uses: Manomenu/suwgate/.github/workflows/gate.yml@<sha>
         with:
             dotnet: true
+            database: true
             browser-install-command: pnpm exec playwright install --with-deps chromium
 ```
 
@@ -100,29 +107,60 @@ publish:
               pack-dir-artifact-id: ${{ needs.release.outputs.pack-dir-artifact-id }}
 ```
 
-A NuGet package (suwbackkit), triggered by a version tag, with the trusted-publishing policy naming the caller's file:
+A NuGet package (suwbackkit, versioned by MinVer from its `v*` tags), triggered by a version tag, the gate first, with the
+trusted-publishing policy naming the caller's file and the environment:
 
 ```yaml
 on:
     push:
+        branches: [master]
         tags: ["v*"]
+    pull_request:
 
 jobs:
+    gate:
+        permissions:
+            contents: read
+        uses: Manomenu/suwgate/.github/workflows/gate.yml@<sha>
+        with:
+            dotnet: true
+
     pack:
+        if: startsWith(github.ref, 'refs/tags/v')
+        needs: gate
         permissions:
             contents: read
         uses: Manomenu/suwgate/.github/workflows/release-nuget.yml@<sha>
+        with:
+            pack-target: Suwbackkit.slnx
 
     publish:
+        if: startsWith(github.ref, 'refs/tags/v') && vars.NUGET_USER != ''
         needs: pack
         runs-on: ubuntu-24.04
+        environment: nuget-org
         permissions:
+            contents: read
             id-token: write
         steps:
             - uses: actions/download-artifact@<sha>
               with:
                   name: nupkg
                   path: nupkg
+            - uses: actions/setup-dotnet@<sha>
+              with:
+                  dotnet-version: 10.0.x
+            - name: A tag publishes its own version only, never a pre-release built between tags
+              env:
+                  TAG: ${{ github.ref_name }}
+              run: |
+                  set -euo pipefail
+                  shopt -s nullglob
+                  packages=(nupkg/*.nupkg)
+                  [ "${#packages[@]}" -gt 0 ] || { echo "no .nupkg in the artifact" >&2; exit 1; }
+                  for package in "${packages[@]}"; do
+                    case "$package" in *."${TAG#v}".nupkg) ;; *) echo "$package does not carry the tag's version" >&2; exit 1 ;; esac
+                  done
             - uses: NuGet/login@<sha>
               id: login
               with:

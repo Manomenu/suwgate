@@ -3,6 +3,7 @@ import { inProfileDirectory, numberedLines, stringList } from "./text.ts";
 
 const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|oklab)\(|\[#/;
 const CODE_FILE = /\.(ts|tsx|js|jsx)$/;
+const TEST_FILE = /\.(test|spec|e2e)\.(ts|tsx|js|jsx)$/;
 
 interface Settings {
     folders?: string[];
@@ -11,7 +12,7 @@ interface Settings {
 export const noRawColors: Guard = {
     id: "no-raw-colors",
     description:
-        "Components use the theme's tokens, never a colour value of their own; it reads the src/ folder of a web app, and the folders settings name",
+        "Components use the theme's tokens, never a colour value of their own; it reads the src/ folder of a web app, and the folders settings name, but not the tests",
     profiles: ["web", "library"],
     settingsSchema: {
         type: "object",
@@ -25,7 +26,7 @@ export const noRawColors: Guard = {
         const defaults = context.profiles.includes("web") ? [inProfileDirectory(context.directories, "web", "src/")] : [];
         const folders = (settings.folders ?? defaults).map((folder) => `${folder.replace(/\/+$/, "")}/`);
         return context.files
-            .filter((file) => CODE_FILE.test(file) && folders.some((folder) => file.startsWith(folder)))
+            .filter((file) => CODE_FILE.test(file) && !TEST_FILE.test(file) && folders.some((folder) => file.startsWith(folder)))
             .flatMap((file) =>
                 numberedLines(context.read(file))
                     .filter(({ text }) => RAW_COLOR.test(text))

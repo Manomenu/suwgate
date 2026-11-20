@@ -7,13 +7,30 @@ const MENTION = /`([\w.\-/@]+)`|\]\(([\w.\-/]+)(?:#[\w-]*)?\)/g;
 const FILE_NAME = /[\w-]\.(cs|csproj|css|json|md|props|sh|slnx|sql|ts|tsx|txt|yaml|yml)$/;
 const NOT_IN_THE_REPOSITORY = ["CLAUDE.local.md", "dist/"];
 const NOT_READ = ["docs/visual/**", ".changeset/**"];
+export const DOTNET_GUARD_IDS = [
+    "architecture/build-settings",
+    "architecture/endpoints",
+    "architecture/every-project-guarded",
+    "architecture/forbidden-type-names",
+    "architecture/interfaces-have-two-implementations",
+    "architecture/layers",
+    "architecture/no-escape-hatches",
+    "architecture/no-fixture-in-field",
+    "architecture/no-unused-types",
+    "architecture/nothing-obsolete",
+    "architecture/one-type-per-file",
+    "architecture/project-references",
+    "architecture/unique-type-names",
+    "database/migration-script-names",
+];
 
 interface Settings {
     ignore?: string[];
+    skip?: string[];
 }
 
-function isPath(mention: string): boolean {
-    return !/^(https?:|\/|@|~)/.test(mention) && (mention.includes("/") || FILE_NAME.test(mention));
+export function isPath(mention: string): boolean {
+    return !/^(https?:|\/|@|~)/.test(mention) && (mention.includes("/") || FILE_NAME.test(mention)) && !DOTNET_GUARD_IDS.includes(mention);
 }
 
 function existsLoosely(mention: string, files: readonly string[]): boolean {
@@ -43,7 +60,7 @@ function stale(document: string, text: string, files: readonly string[], ignored
             {
                 target: document,
                 line: lineAt(text, match.index),
-                message: `${mention} is not a path in this repository: fix the path, or say what the code does instead of where it is (a name meant to be outside the repository, or a pattern of names, goes into settings.docs-paths.ignore; a folder there ends with /)`,
+                message: `${mention} is not a path in this repository: fix the path, or say what the code does instead of where it is (a name meant to be outside the repository, or a pattern of names, goes into settings.docs-paths.ignore, a folder there ends with /; a whole document that is not about this repository goes into settings.docs-paths.skip as a glob)`,
             },
         ];
     });
@@ -51,14 +68,23 @@ function stale(document: string, text: string, files: readonly string[], ignored
 
 export const docsPaths: Guard = {
     id: "docs-paths",
-    description: "Every file and folder the Markdown docs name, in backticks or as a link, exists in the repository",
+    description:
+        "Every file and folder the Markdown docs name, in backticks or as a link, exists in the repository (a .NET guard id is not a path)",
     profiles: "every",
-    settingsSchema: { type: "object", additionalProperties: false, properties: { ignore: stringList } },
+    settingsSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+            ignore: { ...stringList, description: "Names the docs may mention that are not paths here; a folder ends with /." },
+            skip: { ...stringList, description: "Globs of documents not read at all, such as docs/notes/**." },
+        },
+    },
     check(context) {
         const settings = (context.settings ?? {}) as Settings;
         const ignored = [...NOT_IN_THE_REPOSITORY, ...(settings.ignore ?? [])];
+        const notRead = [...NOT_READ, ...(settings.skip ?? [])];
         return context.files
-            .filter((file) => file.endsWith(".md") && baseName(file) !== "CHANGELOG.md" && !matchesAny(file, NOT_READ))
+            .filter((file) => file.endsWith(".md") && baseName(file) !== "CHANGELOG.md" && !matchesAny(file, notRead))
             .flatMap((document) => stale(document, context.read(document), context.files, ignored));
     },
 };

@@ -18,9 +18,13 @@ internal static class SampleAssembly
         ]
     );
 
-    public static Assembly Compile(string name, string source) => Compiled.GetOrAdd(name, _ => Emit(name, source));
+    public static Assembly Compile(string name, string source) =>
+        Compiled.GetOrAdd(name, _ => new AssemblyLoadContext(name).LoadFromAssemblyPath(Emit(name, source)));
 
-    private static Assembly Emit(string name, string source)
+    public static Assembly CompileLoadable(string name, string source) =>
+        Compiled.GetOrAdd(name, _ => AssemblyLoadContext.Default.LoadFromAssemblyPath(Emit(name, source)));
+
+    private static string Emit(string name, string source)
     {
         var compilation = CSharpCompilation.Create(
             name,
@@ -37,6 +41,6 @@ internal static class SampleAssembly
                 string.Join(Environment.NewLine, result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
             );
         }
-        return new AssemblyLoadContext(name).LoadFromAssemblyPath(path);
+        return path;
     }
 }

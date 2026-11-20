@@ -21,7 +21,7 @@
     "explorer.fileNesting.patterns": {
         "README.md": "AGENTS.md, CLAUDE.md, TODO.md, CHANGELOG.md, LICENSE, justfile, suwgate.yml, .editorconfig, .gitignore, .gitattributes",
         "package.json": "pnpm*, eslint*, .prettier*, knip.json, tsconfig*.json, vitest.config.ts",
-        "Suwgate.slnx": "global.json, nuget.config, BannedSymbols.txt, Directory.Build.props, Directory.Build.rsp, Directory.Packages.props, .csharpierrc.json",
+        "Suwgate.slnx": "global.json, nuget.config, BannedSymbols.txt, Directory.Build.props, Directory.Build.rsp, Directory.Packages.props",
         "*.csproj": "packages.lock.json",
         "*.ts": "${capture}.test.ts"
     }

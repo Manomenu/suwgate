@@ -48,6 +48,21 @@ public sealed class EveryProjectGuardedTests
     }
 
     [Fact]
+    public void A_gate_project_that_references_the_guard_packages_needs_neither_layers_nor_an_exception()
+    {
+        SampleAssembly.CompileLoadable(
+            "Sample.Gate",
+            "namespace Sample.Gate { public static class Wiring { public static System.Type Guard => typeof(Suwgate.Architecture.Verification.IGuard); } }"
+        );
+        var layers = LayersFile.Parse(
+            "layers.json",
+            """{ "projects": { "Sample.Guarded": { "layers": ["Api"] }, "Sample.Gate": { "references": ["Sample.Guarded"] } } }"""
+        );
+
+        Assert.Empty(new EveryProjectGuarded(layers, Server).Check());
+    }
+
+    [Fact]
     public void Every_finding_can_be_excepted_and_a_stale_exception_fails() =>
         GuardAssert.HonoursExceptions(new EveryProjectGuarded(Layers, Server));
 }

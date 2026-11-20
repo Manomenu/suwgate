@@ -40,8 +40,10 @@ exceptions:
   exception that no longer matches anything fails the gate until it is deleted.
 - The schema is in the package, `schema/suwgate.schema.json`. VS Code checks the file as you type with
   `"yaml.schemas": { "./node_modules/@maniumek/suwgate/schema/suwgate.schema.json": "suwgate.yml" }` in `.vscode/settings.json`.
-- `settings` configure a guard by its id, for example `dependency-direction: { applications: [Myapp.*] }` or
-  `agents-file: { acronyms: [NUGET] }`; the schema of each guard's settings is in its source, and `suwgate check` validates them.
+- `settings` configure a guard by its id, for example `dependency-direction: { applications: [Myapp.*] }`,
+  `agents-file: { acronyms: [NUGET] }` or `docs-paths: { ignore: [Myapp.Web/node_modules/], skip: [docs/notes/**] }` (`ignore`: names the
+  docs may mention that are not paths here; `skip`: documents, by glob, that docs-paths does not read at all); the schema of each
+  guard's settings is in its source, and `suwgate check` validates them.
 
 ## Hooks
 
@@ -88,9 +90,9 @@ Each step looks where its profile lives (`directories`) and passes with nothing 
 | Profile          | Steps                                                                                                                                                                                                                                                                                                                                                                                                    |
 | :--------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `web`, `library` | `pnpm-install` (only without `node_modules`), `typecheck` (every `tsconfig*.json` but `tsconfig.build.json`), `lint`, `unit-tests` (the Vitest project `unit` when the config names one), `format`, `knip`                                                                                                                                                                                               |
-| `web`            | `e2e`: `playwright test -c e2e/playwright.config.ts`, after the build, the database and the .NET tests                                                                                                                                                                                                                                                                                                   |
+| `web`            | `e2e`: `playwright test -c e2e/playwright.config.ts`, after the build, the database and the .NET tests; with a `dev` section, first the checkout's variables (`suwgate dev checkout-env`) and a fresh, empty `E2E_DATABASE` (`dev db up`, then drop and create it); Playwright's `webServer` starts and stops the server and the web app                                                                 |
 | `library`        | `stories` (with `.storybook/`), `publint`, `attw`, `consumer-app` (packs the library into a copy of `gate/consumer/app`, builds it, runs `gate/consumer/playwright.config.ts`), `visual` (`visual/playwright.config.ts` in the Playwright image of the installed `@playwright/test`), `changeset`                                                                                                        |
-| `dotnet`         | `dotnet-build`, `dotnet-format`, `dotnet-test` (`--quick`: only the test projects that use `Suwgate.Architecture` or `Suwgate.Database`)                                                                                                                                                                                                                                                                 |
+| `dotnet`         | `dotnet-build`, `dotnet-format`, `dotnet-test` (with a `dev` section, under the checkout's variables, so two worktrees never share a test database; `--quick`: only the test projects that use `Suwgate.Architecture` or `Suwgate.Database`); every .NET step leaves no idle MSBuild worker or build server behind                                                                                       |
 | `dotnet`, `web`  | with `contract/openapi.json`: `api-contract` (the contract and `src/api/openapi.d.ts` of the web app regenerated from the server's project, the one that references `Microsoft.Extensions.ApiDescription.Server`), `api-version` (oasdiff against master; a break needs a new major version in `contract/package.json`), `contract-pins` (every test tagged `contract <name>@<version>` names a version) |
 | `database`       | `database-up`: `docker compose --profile db up -d --wait db`, not in CI                                                                                                                                                                                                                                                                                                                                  |
 | every repository | `compose` (with a compose file), `criteria`, `shellcheck`, `gitleaks`                                                                                                                                                                                                                                                                                                                                    |
@@ -119,13 +121,36 @@ adds the repository's own (`{ "kinds": [{ "kind", "paths", "how" }] }`, optional
 
 The configs of the tools the steps run extend suwgate's, so an application keeps only its own paths:
 
-| Tool       | The application's file                                                                                                                                                                                     |
-| :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prettier   | `.prettierrc.json`: `"@maniumek/suwgate/prettier"` (with a plugin: spread it in `prettier.config.js`)                                                                                                      |
-| TypeScript | `{ "extends": "@maniumek/suwgate/tsconfig/browser", "include": ["src"] }`; `tsconfig/node` for the configs, scripts and tests run by Node; `tsconfig/strict` for the options alone                         |
-| knip       | `knip.config.ts`: `export { default } from "@maniumek/suwgate/knip"`, or `knip({ entry: [...] })`; it ignores the tools the steps run and the generated API types, and reads the steps' Playwright configs |
-| Vitest     | `unitTests({ environment: "jsdom" })` and `storyTests({ plugin, provider })` from `@maniumek/suwgate/vitest`: the projects `unit` and `stories` the steps run                                              |
-| Playwright | `defineConfig(e2eTests({ use: { baseURL }, webServer }))` or `defineConfig(visualTests())` from `@maniumek/suwgate/playwright`                                                                             |
+| Tool       | The application's file                                                                                                                                                                                                                                    |
+| :--------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prettier   | `.prettierrc.json`: `"@maniumek/suwgate/prettier"` (with a plugin: spread it in `prettier.config.js`)                                                                                                                                                     |
+| TypeScript | `{ "extends": "@maniumek/suwgate/tsconfig/browser", "include": ["src"] }`; `tsconfig/node` for the configs, scripts and tests run by Node; `tsconfig/strict` for the options alone                                                                        |
+| knip       | `knip.config.ts`: `export { default } from "@maniumek/suwgate/knip"`, or `knip({ entry: [...] })`; it ignores the tools the steps run and the generated API types, and reads the steps' Playwright configs                                                |
+| Vitest     | `unitTests({ environment: "jsdom" })` and `storyTests({ plugin, provider })` from `@maniumek/suwgate/vitest`: the projects `unit` and `stories` the steps run                                                                                             |
+| Playwright | `defineConfig(e2eTests({ use: { baseURL }, webServer }))` or `defineConfig(visualTests())` from `@maniumek/suwgate/playwright`                                                                                                                            |
+| ESLint     | `app({ root, features, shared, sharedImports, storage })` from `@maniumek/suwgate/eslint`: a feature imports itself and the shared folders, a shared folder only itself and what `sharedImports` allows it (`[["design", "api"]]`: design may import api) |
+
+### What the config files must say
+
+`required-files` asks for the files; `config-contents` checks that they say what the gate relies on, each where its profile lives
+(`directories`), and only when the profile is on and the file is there:
+
+| File                                                                          | Profile          | Must contain                                                                                                                                           |
+| :---------------------------------------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `global.json`                                                                 | `dotnet`         | an exact `sdk.version` (`10.0.100`), a `sdk.rollForward` other than `major` and `latestMajor`, `test.runner` `Microsoft.Testing.Platform`              |
+| `.editorconfig` (the root's, then the dotnet directory's)                     | `dotnet`         | `max_line_length = 140` for `*.cs`, `*.csproj`, `*.props` and `*.targets`: CSharpier's width; a `.csharpierrc*` anywhere must go, it would win over it |
+| `Directory.Packages.props`                                                    | `dotnet`         | `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`                                                                                |
+| `tsconfig*.json` (not `tsconfig.build.json`, which the typecheck step skips)  | `web`, `library` | `extends` `@maniumek/suwgate/tsconfig/...`, directly or through another tsconfig of the repository                                                     |
+| `eslint.config.js`, `knip.config.ts`, the Vitest config                       | `web`, `library` | an import of `@maniumek/suwgate/eslint`, `/knip`, `/vitest`                                                                                            |
+| `.prettierrc.json` or `prettier.config.js`                                    | `web`, `library` | exactly `"@maniumek/suwgate/prettier"`, or an import of it                                                                                             |
+| `e2e/playwright.config.ts`, `visual/playwright.config.ts`                     | `web`, `library` | an import of `@maniumek/suwgate/playwright`                                                                                                            |
+| `package.json` that installs suwgate (the root or a web or library directory) | every            | `@maniumek/suwgate` at an exact version: no `^`, `~`, range or tag                                                                                     |
+| `pnpm-workspace.yaml` (web, library, and where suwgate is installed)          | every            | no `minimumReleaseAge` of 0 (pnpm waits 1440 minutes by default); `minimumReleaseAgeExclude` is fine                                                   |
+| `.vscode/settings.json`                                                       | every            | `yaml.schemas` mapping `./node_modules/@maniumek/suwgate/schema/suwgate.schema.json` (or under a profile's directory) to `suwgate.yml`                 |
+| `.github/workflows/*.yml`                                                     | every            | a job with `uses: Manomenu/suwgate/.github/workflows/gate.yml@<full 40-character commit sha>`                                                          |
+
+`required-files` also asks the `dotnet` profile for exactly one `*.slnx` in its directory, and for `Directory.Build.rsp`
+(`-nodeReuse:false`, so no idle MSBuild worker stays behind).
 
 ### The .NET guards
 

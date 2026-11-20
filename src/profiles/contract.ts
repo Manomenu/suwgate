@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import type { Step, StepContext } from "../gate/contract.ts";
-import { DOTNET_TEST } from "./dotnet.ts";
+import { DOTNET_TEST, NO_IDLE_BUILD_PROCESSES } from "./dotnet.ts";
 import { PNPM_INSTALL } from "./node.ts";
 import { has, quoted, read, script, tracked } from "./shell.ts";
 
@@ -10,7 +10,7 @@ const CONTRACT = "contract/openapi.json";
 
 const CONTRACT_VERSION = "contract/package.json";
 
-const TYPES = "src/api/openapi.d.ts";
+export const API_TYPES = "src/api/openapi.d.ts";
 
 export const API_CONTRACT = "api-contract";
 
@@ -31,7 +31,7 @@ function fail(message: string): string {
 function webApp(context: StepContext): string | null {
     if (!context.profiles.includes("web")) return null;
     const directory = path.join(context.root, context.directories.web ?? "");
-    return existsSync(path.join(directory, TYPES)) ? directory : null;
+    return existsSync(path.join(directory, API_TYPES)) ? directory : null;
 }
 
 export function apiContract(context: StepContext): string | null {
@@ -46,8 +46,9 @@ export function apiContract(context: StepContext): string | null {
     const name = path.basename(server, ".csproj");
     const document = `"$work"/${quoted(`${name}.json`)}`;
     const web = webApp(context);
-    const types = web === null ? "" : path.join(web, TYPES);
+    const types = web === null ? "" : path.join(web, API_TYPES);
     return script([
+        NO_IDLE_BUILD_PROCESSES,
         'work="$(mktemp -d)"',
         "trap 'rm -rf \"$work\"' EXIT",
         `rm -f ${quoted(path.join(path.dirname(server), "obj", `${name}.OpenApiFiles.cache`))}`,
@@ -125,7 +126,7 @@ export function contractPins(context: StepContext): string | null {
 export const contractSteps: readonly Step[] = [
     {
         id: API_CONTRACT,
-        title: `the API contract and the web app's types up to date with the server (${CONTRACT}, ${TYPES}, openapi-typescript)`,
+        title: `the API contract and the web app's types up to date with the server (${CONTRACT}, ${API_TYPES}, openapi-typescript)`,
         profile: "dotnet",
         needs: ["dotnet"],
         after: [DOTNET_TEST, PNPM_INSTALL],

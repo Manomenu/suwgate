@@ -1,17 +1,21 @@
 import type { Step, StepContext } from "../gate/contract.ts";
 import { DATABASE_UP } from "./database.ts";
-import { changedIn, quoted, read, tracked, withChanged } from "./shell.ts";
+import { CHECKOUT_ENV, changedIn, hasDevSection, quoted, read, tracked, withChanged } from "./shell.ts";
 
 const DOTNET_INPUT =
     /\.(cs|csproj|props|targets|slnx|sln|rsp)$|(^|\/)(\.editorconfig|BannedSymbols\.txt|global\.json|packages\.lock\.json|nuget\.config)$/;
 
-const GUARD_PACKAGE = /<(PackageReference|ProjectReference)\b[^>]*Include="[^"]*Suwgate\.(Architecture|Database)\b/;
+const GUARD_PACKAGE = /<(PackageReference|ProjectReference)\b[^>]*(?:Include|Update)="[^"]*Suwgate\.(Architecture|Database)\b/;
 
 const TEST_PROJECT = /<PackageReference\b[^>]*Include="xunit\.v3"|<IsTestProject>true<\/IsTestProject>/;
 
-const BUILD = "dotnet build --nologo -v quiet";
+export const NO_IDLE_BUILD_PROCESSES = "export MSBUILDDISABLENODEREUSE=1 DOTNET_CLI_USE_MSBUILD_SERVER=0";
+
+const BUILD = `${NO_IDLE_BUILD_PROCESSES} && dotnet build --nologo -v quiet`;
 
 const TEST = "dotnet test --no-build --no-progress";
+
+const FORMAT = `${NO_IDLE_BUILD_PROCESSES} && dotnet tool restore >/dev/null`;
 
 export const DOTNET_BUILD = "dotnet-build";
 
@@ -19,6 +23,11 @@ export const DOTNET_TEST = "dotnet-test";
 
 function dotnetChanged(context: StepContext): boolean {
     return changedIn(context, DOTNET_INPUT).length > 0;
+}
+
+export function inCheckoutEnv(context: StepContext, command: string): string {
+    if (!hasDevSection(context)) return `${NO_IDLE_BUILD_PROCESSES} && ${command}`;
+    return [...CHECKOUT_ENV, command].join(" && ");
 }
 
 export function guardTests(context: StepContext): string | null {
@@ -46,21 +55,24 @@ export const dotnetSteps: readonly Step[] = [
         title: "format C# (csharpier check)",
         profile: "dotnet",
         needs: ["dotnet"],
-        run: "dotnet tool restore >/dev/null && dotnet csharpier check .",
+        run: `${FORMAT} && dotnet csharpier check .`,
         quick: (context) => {
             const command = withChanged(context, /\.cs$/, "dotnet csharpier check");
-            return command === null ? null : `dotnet tool restore >/dev/null && ${command}`;
+            return command === null ? null : `${FORMAT} && ${command}`;
         },
         limitSeconds: 120,
     },
     {
         id: DOTNET_TEST,
-        title: "tests (dotnet test, xUnit v3; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
+        title: "tests (dotnet test, xUnit v3, with the checkout's databases when suwgate.yml has dev; --quick: the projects that test with Suwgate.Architecture or Suwgate.Database)",
         profile: "dotnet",
         needs: ["dotnet"],
         after: [DOTNET_BUILD, DATABASE_UP],
-        run: TEST,
-        quick: guardTests,
+        run: (context) => inCheckoutEnv(context, TEST),
+        quick: (context) => {
+            const command = guardTests(context);
+            return command === null ? null : inCheckoutEnv(context, command);
+        },
         limitSeconds: 600,
     },
 ];

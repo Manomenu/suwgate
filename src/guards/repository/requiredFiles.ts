@@ -1,5 +1,7 @@
-import { PROFILES, type Guard, type Profile } from "../../gate/contract.ts";
-import { inProfileDirectory, stringList } from "./text.ts";
+import path from "node:path";
+
+import { PROFILES, type Finding, type Guard, type GuardContext, type Profile } from "../../gate/contract.ts";
+import { baseName, inProfileDirectory, stringList } from "./text.ts";
 
 type Purposes = Readonly<Record<string, string>>;
 
@@ -41,6 +43,7 @@ export const REQUIRED_BY_PROFILE: Readonly<Record<Profile, Purposes>> = {
         "nuget.config": "the package sources, so a restore never reaches an unexpected feed",
         "Directory.Build.props": "the build settings of every project (warnings as errors, analyzers, nullable, lock files)",
         "Directory.Packages.props": "the one place that pins the version of every NuGet package",
+        "Directory.Build.rsp": "the MSBuild switches of every build, -nodeReuse:false among them, so no idle MSBuild worker stays behind",
         ".config/dotnet-tools.json": "the .NET tools at pinned versions, such as CSharpier for the format step",
         "layers.json": "the layers of the server and which project may reference which, read by Suwgate.Architecture",
     },
@@ -63,7 +66,7 @@ interface Settings {
     files?: string[];
 }
 
-function required(context: Parameters<Guard["check"]>[0], settings: Settings): Map<string, string> {
+function required(context: GuardContext, settings: Settings): Map<string, string> {
     const files = new Map<string, string>();
     for (const [file, purpose] of Object.entries(EVERY_REPOSITORY)) files.set(file, `${purpose}. Every repository needs it: add it`);
     for (const profile of PROFILES.filter((candidate) => context.profiles.includes(candidate))) {
@@ -78,19 +81,46 @@ function required(context: Parameters<Guard["check"]>[0], settings: Settings): M
     return files;
 }
 
+function solutionFindings(context: GuardContext): Finding[] {
+    if (!context.profiles.includes("dotnet")) return [];
+    const directory = (context.directories.dotnet ?? "").replace(/\/+$/, "");
+    const inDirectory = context.files.filter((file) => path.posix.dirname(file) === (directory === "" ? "." : directory));
+    const solutions = inDirectory.filter((file) => file.endsWith(".slnx"));
+    const target = inProfileDirectory(context.directories, "dotnet", "*.slnx");
+    if (solutions.length === 1) return [];
+    if (solutions.length === 0) {
+        return [
+            {
+                target,
+                message:
+                    "missing: the one solution file that dotnet build and dotnet test find in the dotnet profile's directory. Add it with dotnet new sln --format slnx (an old .sln: dotnet sln migrate, then delete the .sln), or add an exception with the reason it does not apply",
+            },
+        ];
+    }
+    return [
+        {
+            target,
+            message: `${solutions.length} solution files (${solutions.map(baseName).join(", ")}): keep one, because dotnet build and dotnet test refuse to choose between them`,
+        },
+    ];
+}
+
 export const requiredFiles: Guard = {
     id: "required-files",
     description:
-        "Every file a repository of these profiles needs is there (the gate, the agent rules, the editor and git settings, the hooks, each profile's tool configs)",
+        "Every file a repository of these profiles needs is there (the gate, the agent rules, the editor and git settings, the hooks, each profile's tool configs, one .slnx for .NET)",
     profiles: "every",
     settingsSchema: { type: "object", additionalProperties: false, properties: { files: stringList } },
     check(context) {
         const present = new Set(context.files);
-        return [...required(context, (context.settings ?? {}) as Settings)]
-            .filter(([file]) => !isPresent(file, present))
-            .map(([file, purpose]) => ({
-                target: file,
-                message: `missing: ${purpose}, or add an exception with the reason it does not apply`,
-            }));
+        return [
+            ...[...required(context, (context.settings ?? {}) as Settings)]
+                .filter(([file]) => !isPresent(file, present))
+                .map(([file, purpose]) => ({
+                    target: file,
+                    message: `missing: ${purpose}, or add an exception with the reason it does not apply`,
+                })),
+            ...solutionFindings(context),
+        ];
     },
 };

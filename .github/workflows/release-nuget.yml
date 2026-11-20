@@ -20,9 +20,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: actions/checkout v7.0.1
+      - name: actions/checkout v7.0.1 (full history and tags, so a version read from git tags, such as MinVer's, is right)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: actions/setup-dotnet v6.0.0
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68

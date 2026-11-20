@@ -11,6 +11,8 @@ import type { Config } from "../../gate/config.ts";
 import type { GuardException } from "../../gate/contract.ts";
 import { runGuards } from "../../gate/guardsStep.ts";
 import { repositoryFiles } from "../../gate/repository.ts";
+import { API_TYPES } from "../../profiles/contract.ts";
+import { GENERATED_API_TYPES } from "./eslint.ts";
 import { commentGuards } from "./index.ts";
 
 const SUWGATE = path.resolve(import.meta.dirname, "../../..");
@@ -156,6 +158,17 @@ describe("comments-eslint", () => {
         });
 
         expect(await failures(root)).toEqual(["comments-eslint: src/generated.ts"]);
+    }, 30_000);
+
+    it("leaves out the web app's API types, which the api-contract step generates", async () => {
+        const root = repository({
+            ...WITH_TOOL_DIRECTIVES,
+            "eslint.config.js": eslintConfig(`, { ignores: ["${GENERATED_API_TYPES}"] }`),
+            [GENERATED_API_TYPES]: "export interface paths {}\n",
+        });
+
+        expect(GENERATED_API_TYPES).toBe(API_TYPES);
+        expect(await failures(root)).toEqual([]);
     }, 30_000);
 
     it("fails once for the directory when eslint refuses comments in none of its files", async () => {

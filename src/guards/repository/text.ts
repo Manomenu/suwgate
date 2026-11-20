@@ -41,3 +41,37 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export const stringList = { type: "array", uniqueItems: true, items: { type: "string", minLength: 1 } } as const;
+
+function withoutComments(text: string): string {
+    let kept = "";
+    let index = 0;
+    let inString = false;
+    while (index < text.length) {
+        const character = text.charAt(index);
+        const next = text.charAt(index + 1);
+        if (inString) {
+            kept += character;
+            if (character === "\\") {
+                kept += next;
+                index += 2;
+                continue;
+            }
+            if (character === '"') inString = false;
+            index++;
+        } else if (character === "/" && next === "/") {
+            while (index < text.length && text.charAt(index) !== "\n") index++;
+        } else if (character === "/" && next === "*") {
+            const end = text.indexOf("*/", index + 2);
+            index = end === -1 ? text.length : end + 2;
+        } else {
+            if (character === '"') inString = true;
+            kept += character;
+            index++;
+        }
+    }
+    return kept;
+}
+
+export function parseJsonc(text: string): unknown {
+    return parseJson(withoutComments(text).replace(/,(\s*[}\]])/g, "$1"));
+}

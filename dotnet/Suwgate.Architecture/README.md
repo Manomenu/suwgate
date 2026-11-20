@@ -100,8 +100,9 @@ exceptions:
 The repository's own file, read by `layers`, `project-references` and `every-project-guarded`. Every project of the solution is
 listed with what it may reference and show its internals to; a production project lists its layers from the top down, the first
 namespace segment under the project's name, with `|` between the parts of one level (they may not use each other). A project
-whose name ends with `.Tests` needs no layers; a test project named otherwise (the gate) gets an exception of
-`architecture/every-project-guarded` with that reason.
+whose name ends with `.Tests` needs no layers, and neither does the gate: a project whose assembly references
+`Suwgate.Architecture` or `Suwgate.Database` is a test project of the guards (a production project takes the package for its
+build only), so `architecture/every-project-guarded` skips it without an exception.
 
 ```json
 {

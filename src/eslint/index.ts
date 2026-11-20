@@ -20,6 +20,7 @@ export interface StrictOptions {
 export interface AppOptions extends StrictOptions {
     features: readonly string[];
     shared?: readonly string[];
+    sharedImports?: readonly (readonly [from: string, to: string])[];
     storage?: readonly string[];
 }
 
@@ -30,7 +31,7 @@ const BROWSER_STORAGE = ["localStorage", "sessionStorage", "indexedDB"];
 const BROWSER_STORAGE_FIX =
     "Keep the state on the server, in the address or in React; browser storage is allowed only in the files that storage of app() names in eslint.config.js.";
 const BOUNDARIES_FIX =
-    "A feature of src/ imports only itself and the shared folders, a shared folder only itself, a file directly in src/ anything; a new folder of src/ goes into features or shared of app() in eslint.config.js.";
+    "A feature of src/ imports only itself and the shared folders, a shared folder only itself (and the shared folders sharedImports of app() lets it), a file directly in src/ anything; a new folder of src/ goes into features or shared of app() in eslint.config.js.";
 
 export const plugin: ESLint.Plugin = {
     meta: { name: "@maniumek/suwgate" },
@@ -98,6 +99,10 @@ function featureBoundaries(options: AppOptions): Linter.Config {
                             allow: { to: [{ file: { categories: "entry" } }, { element: { types: { anyOf: ["feature", "shared"] } } }] },
                         },
                         { from: { element: { type: "feature" } }, allow: { to: { element: { type: "shared" } } } },
+                        ...(options.sharedImports ?? []).map(([from, to]) => ({
+                            from: { element: { type: "shared", path: `src/${from}/**` } },
+                            allow: { to: { element: { type: "shared", path: `src/${to}/**` } } },
+                        })),
                     ],
                 },
             ],

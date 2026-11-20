@@ -16,6 +16,18 @@ describe("no-raw-colors", () => {
         expect(findings.length > 0).toBe(raw);
     });
 
+    it("leaves the tests out, which may assert a colour value", async () => {
+        const files = {
+            "src/a.test.ts": "'#fff'",
+            "src/b.spec.ts": "'#fff'",
+            "src/c.e2e.ts": "'#fff'",
+            "src/d.test.tsx": "'#fff'",
+            "src/e.tsx": "'#fff'",
+        };
+
+        expect(shown(await findingsOf(noRawColors, files, { profiles: ["web"] }))).toEqual(["src/e.tsx:1"]);
+    });
+
     it("reads the src/ folder of the web app by default, and nothing of a library", async () => {
         const files = { "Myapp.Web/src/a.tsx": "'#fff'", "Myapp.Web/e2e/b.ts": "'#fff'", "src/c.ts": "'#fff'" };
 
