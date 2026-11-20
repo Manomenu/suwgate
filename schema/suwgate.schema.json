@@ -23,6 +23,18 @@
                 "^": { "$ref": "#/$defs/relativePath" }
             }
         },
+        "quick": {
+            "description": "The quick gate (suwgate check --quick).",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "limitSeconds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "The quick gate fails when it takes longer (default 20). SUWGATE_QUICK_LIMIT on a machine overrides it."
+                }
+            }
+        },
         "steps": {
             "type": "object",
             "additionalProperties": false,

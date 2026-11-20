@@ -143,6 +143,27 @@ describe("suwgate check", () => {
         expect(seen).toEqual(["web app app"]);
     });
 
+    it("fails --quick over the budget suwgate.yml sets, and SUWGATE_QUICK_LIMIT on a machine overrides it", async () => {
+        const root = repository({
+            "README.md": "",
+            "suwgate.yml": [
+                "profiles: [web]",
+                "quick:",
+                "  limitSeconds: 1",
+                "steps:",
+                "  add:",
+                "    - name: slow",
+                "      run: sleep 2",
+                "      quick: true",
+            ].join("\n"),
+        });
+
+        const over = await run(root, true);
+        expect(over.exitCode).toBe(1);
+        expect(over.text).toContain("over its budget of 1s");
+        expect((await run(root, true, { SUWGATE_QUICK_LIMIT: "30" })).exitCode).toBe(0);
+    });
+
     it("exits 2 with every problem of an invalid suwgate.yml", async () => {
         const root = repository({ "suwgate.yml": "profiles: [web]\nexceptions:\n  - guard: has-readme\n    target: README.md\n" });
 

@@ -33,6 +33,7 @@ export interface Config {
     skip: SkippedStep[];
     exceptions: GuardException[];
     settings: Record<string, unknown>;
+    quickLimitSeconds?: number;
 }
 
 interface RawConfig {
@@ -41,6 +42,7 @@ interface RawConfig {
     steps?: { add?: AddedStep[]; skip?: SkippedStep[] };
     exceptions?: GuardException[];
     settings?: Record<string, unknown>;
+    quick?: { limitSeconds?: number };
 }
 
 export interface Catalog {
@@ -230,6 +232,7 @@ export function parseConfig(text: string, catalog: Catalog): Loaded {
             skip: data.steps?.skip ?? [],
             exceptions: data.exceptions ?? [],
             settings: data.settings ?? {},
+            ...(data.quick?.limitSeconds === undefined ? {} : { quickLimitSeconds: data.quick.limitSeconds }),
         },
     };
 }

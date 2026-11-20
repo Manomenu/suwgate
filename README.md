@@ -34,6 +34,8 @@ exceptions:
   guards run only with `database`.
 - `steps.add` runs more (`name`, `run`, optionally `title`, `quick`, `after`, `limitSeconds`); `steps.skip` leaves a step out,
   always with a `reason`.
+- `quick.limitSeconds` is the budget of `suwgate check --quick` (default 20): the quick gate fails above it. A machine that is slow
+  across the board overrides it with `SUWGATE_QUICK_LIMIT=<seconds>`.
 - `exceptions` let one target through one guard, always with a `reason`; `suwgate check` counts them in its report, and an
   exception that no longer matches anything fails the gate until it is deleted.
 - The schema is in the package, `schema/suwgate.schema.json`. VS Code checks the file as you type with

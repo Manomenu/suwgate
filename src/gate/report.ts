@@ -62,7 +62,7 @@ export function report(input: ReportInput): Report {
             row(
                 "FAIL",
                 input.totalSeconds,
-                `the quick gate is over its budget of ${input.quickLimit}s: move the slow step to the full gate or speed it up; a machine that is slow across the board runs with SUWGATE_QUICK_LIMIT=<seconds>`,
+                `the quick gate is over its budget of ${input.quickLimit}s: move the slow step to the full gate or speed it up; a repository whose quick gate is rightly longer sets quick.limitSeconds in suwgate.yml, and a machine that is slow across the board runs with SUWGATE_QUICK_LIMIT=<seconds>`,
             ),
         );
     }
