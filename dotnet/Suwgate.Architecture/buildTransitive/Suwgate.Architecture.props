@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion Condition="'$(LangVersion)' == ''">latest</LangVersion>
+    <ImplicitUsings Condition="'$(ImplicitUsings)' == ''">enable</ImplicitUsings>
+    <Nullable Condition="'$(Nullable)' == ''">enable</Nullable>
+    <TreatWarningsAsErrors Condition="'$(TreatWarningsAsErrors)' == ''">true</TreatWarningsAsErrors>
+    <AnalysisLevel Condition="'$(AnalysisLevel)' == ''">latest-all</AnalysisLevel>
+    <EnforceCodeStyleInBuild Condition="'$(EnforceCodeStyleInBuild)' == ''">true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile Condition="'$(GenerateDocumentationFile)' == ''">true</GenerateDocumentationFile>
+    <InvariantGlobalization Condition="'$(InvariantGlobalization)' == ''">true</InvariantGlobalization>
+    <SuwgateRepositoryBannedSymbols>$([MSBuild]::GetPathOfFileAbove('BannedSymbols.txt', '$(MSBuildProjectDirectory)'))</SuwgateRepositoryBannedSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Suwgate.txt" Link="BannedSymbols.Suwgate.txt" Visible="false" />
+    <AdditionalFiles
+      Include="$(SuwgateRepositoryBannedSymbols)"
+      Link="BannedSymbols.txt"
+      Visible="false"
+      Condition="'$(SuwgateRepositoryBannedSymbols)' != '' And Exists('$(SuwgateRepositoryBannedSymbols)')"
+    />
+    <GlobalAnalyzerConfigFiles Include="$(MSBuildThisFileDirectory)Suwgate.Architecture.globalconfig" />
+  </ItemGroup>
+</Project>

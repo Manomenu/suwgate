@@ -8,6 +8,8 @@
   </ItemGroup>
   <ItemGroup Label="guards">
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.4" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
   </ItemGroup>
   <ItemGroup Label="tests">
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
