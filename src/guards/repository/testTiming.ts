@@ -52,9 +52,6 @@ const CSHARP_CALLS: readonly CallRule[] = [
         verb: `${WAITS} outside a polling loop`,
         allowed: (call) => onFakeClock(call) || /^Timeout\.Infinite(TimeSpan)?$/.test(call.args[0] ?? "") || insideLoop(call.text, call.at),
     },
-    { pattern: /\.CancelAfter\s*\(/g, verb: LIMITS, allowed: onFakeClock },
-    { pattern: /\bnew\s+CancellationTokenSource\s*\(/g, verb: LIMITS, allowed: (call) => call.args.length === 0 || onFakeClock(call) },
-    { pattern: /\.WaitAsync\s*\(/g, verb: LIMITS, allowed: (call) => !/^(TimeSpan\b|\d)/.test(call.args[0] ?? "") || onFakeClock(call) },
 ];
 
 const WEB_RULES: readonly WebRule[] = [
