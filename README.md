@@ -12,6 +12,10 @@ pnpm exec suwgate step             # the steps of this repository, with their ti
 pnpm exec suwgate step e2e -- --headed -g notes   # one step and what it needs; after --, arguments for its tool
 ```
 
+pnpm installs a version only once it is a day old (`minimumReleaseAge`). To take a new suwgate the day it is published, exclude
+the package by name in `pnpm-workspace.yaml`, `minimumReleaseAgeExclude: ["@maniumek/suwgate"]`: an entry with a version
+(`@maniumek/suwgate@0.5.0`) has to be edited on every version bump, the name does not.
+
 `suwgate.yml` in the repository root says what the repository is and where it departs from the defaults:
 
 ```yaml
@@ -117,7 +121,9 @@ build come with it) and prints the report `suwgate check` prints, with the same 
   server): `suwgate step e2e` does not run them.
 - It is not a gate pass: the Stop hook does not count it, and the next turn still runs the quick gate.
 - The evidence still applies where it makes sense for one step: a test step that ran 0 tests fails (a filter that matches
-  nothing is a mistake); `dotnet-test` asks the .NET guards' evidence only when it gets no arguments, because a filtered run
+  nothing is a mistake). With arguments, `dotnet-test` counts the tests of the whole run, not of each test project
+  (`--ignore-exit-code 8` for each test project, then xUnit's reports of all of them), so `--filter-class "*Notes*"` passes in a
+  repository with more than one test project and fails only when no test anywhere matched; `dotnet-test` asks the .NET guards' evidence only when it gets no arguments, because a filtered run
   leaves guards out on purpose; `criteria-ran` reads the reports of the same run, so `suwgate step criteria-ran` runs every
   test step first, and with `--only` it has no reports and fails.
 
@@ -274,8 +280,8 @@ A check counts only when the tool shows it ran, not because a file or a line of 
   `VerifyAll` or `Guards.Verify`) writes its id and outcome there. The step fails unless every guard of the profiles that
   `guards.skip` does not name is in it, so a deleted guard test, a `[Fact(Skip = …)]` or a filtered-out one fails the gate.
 - Zero tests fail: `unit-tests`, `stories` (Vitest, its JSON report), `e2e` (Playwright, its JSON report) and `dotnet-test`
-  (`--zero-tests-policy strict` of Microsoft.Testing.Platform, and xUnit's XML report) fail when the tool ran no test, also when
-  every test was skipped. A repository with truly no tests for a profile skips the step in `suwgate.yml` with a reason.
+  (`--zero-tests-policy strict` of Microsoft.Testing.Platform for each test project, and xUnit's XML reports for the whole run)
+  fail when the tool ran no test, also when every test was skipped. A repository with truly no tests for a profile skips the step in `suwgate.yml` with a reason.
 - `typecheck` reads `tsc --showConfig` of every tsconfig it checks: the strict options of the suwgate preset must be in effect, so
   an override that turns one off fails, naming the option.
 - `lint` reads `eslint --print-config` of a source file of `src/`: `suwgate/no-comments` and `boundaries/dependencies` must be
