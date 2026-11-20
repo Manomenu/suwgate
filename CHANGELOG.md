@@ -1,5 +1,48 @@
 # @maniumek/suwgate
 
+## 0.2.0
+
+### Minor Changes
+
+- f2c98df: - `docs-paths` takes `skip`, globs of documents it does not read at all (`docs-paths: { skip: [docs/notes/**] }`).
+  - `app()` of `@maniumek/suwgate/eslint` takes `sharedImports`, the edges allowed between shared folders
+    (`sharedImports: [["design", "api"]]`); every other import between shared folders still fails.
+- f2c98df: New guard `config-contents`: the config files suwgate relies on must say what it needs (README, "What the config files must say"):
+  an exact `sdk.version`, a `sdk.rollForward` short of a major and `test.runner` `Microsoft.Testing.Platform` in `global.json`;
+  `max_line_length = 140` for C# and the MSBuild files in `.editorconfig`, and no `.csharpierrc*` (delete `.csharpierrc.json`: CSharpier
+  reads the width from `.editorconfig`, and a `.csharpierrc` would win over it); `ManagePackageVersionsCentrally` in
+  `Directory.Packages.props`; the suwgate presets in the tsconfig, ESLint, Prettier, knip, Vitest and Playwright configs; an exact
+  `@maniumek/suwgate` version; no `minimumReleaseAge: 0`; the schema in `yaml.schemas`; and a CI job that calls
+  `Manomenu/suwgate/.github/workflows/gate.yml` pinned by its full commit sha. A repository fixes each finding as its message says, or
+  adds an exception with the reason.
+- f2c98df: The `e2e` step works for a real app: with a `dev` section in `suwgate.yml` it applies `suwgate dev checkout-env`, starts the
+  database (`suwgate dev db up`), drops and creates the checkout's empty `E2E_DATABASE`, then runs Playwright, whose `webServer`
+  starts and stops the server and the web app. A repository deletes its own fresh-database step, its `skip: e2e` and its
+  `scripts/.internal/e2e.sh`.
+- f2c98df: `required-files` asks the `dotnet` profile for `Directory.Build.rsp` (`-nodeReuse:false`) and for exactly one `*.slnx` in its
+  directory. A repository without them adds them (`dotnet new sln --format slnx`, or `dotnet sln migrate` for an old `.sln`).
+
+### Patch Changes
+
+- f2c98df: Fixes found while moving the template, suwbackkit and alfusion onto suwgate:
+  
+  - `dotnet-test --quick` finds a gate project that references the guards with `<PackageReference Update="Suwgate.Architecture" />`.
+  - `docs-paths` reads a .NET guard id such as `architecture/layers` as a guard, not as a missing path.
+  - `repository-layout` reads the map only from the section `## The map` of `docs/architecture.md`, and asks for that section when it
+    is missing.
+  - The .NET steps (`dotnet-build`, `dotnet-format`, `dotnet-test`, `api-contract`) set `MSBUILDDISABLENODEREUSE=1` and
+    `DOTNET_CLI_USE_MSBUILD_SERVER=0`, so no idle MSBuild worker or build server stays behind.
+  - `dotnet-test` runs under `suwgate dev checkout-env` when `suwgate.yml` has a `dev` section, so two worktrees never share a test
+    database.
+  - `no-raw-colors` leaves the tests out (`*.test.*`, `*.spec.*`, `*.e2e.*`).
+  - `comments-eslint` leaves out the web app's generated `src/api/openapi.d.ts`, which the `api-contract` step checks: its exception
+    in `suwgate.yml` can go.
+- ae45c63: `quick.limitSeconds` in `suwgate.yml` sets the budget of `suwgate check --quick` for the repository (default 20 seconds);
+  `SUWGATE_QUICK_LIMIT` on a machine still overrides it.
+- e4af576: The guard `forbidden-names` refuses `base` only in the name of a folder or project, no longer in a file's: a file is named after the
+  type it holds, and `architecture/forbidden-type-names` allows Base in a type's name (`KnowledgeBaseView.cs`), as it forbids it only as
+  a namespace segment.
+
 ## 0.1.1
 
 ### Patch Changes
