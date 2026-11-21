@@ -23,7 +23,7 @@ every repository that installs them.
 
 - The main branch is `master`, never `main`.
 - Work on a feature branch, never on `master`. Agents do not rewrite or discard history: no
-  amend, reset, rebase, stash, force-push or deleting an unmerged branch. Merging and releasing are the owner's.
+  amend, reset, rebase, stash, force-push or deleting an unmerged branch. An agent may merge a pull request whose CI is green, and release.
 - A branch merged into `master` is deleted right after the merge: local, remote and its worktree, with
   `git branch -d`, which refuses unmerged work.
 - A change with a red gate is not committed: it stays in the working tree and the summary says why.
@@ -35,8 +35,8 @@ every repository that installs them.
 
 - Every change of `src/` or `schema/` carries a changeset (`just changeset`): patch for a fix, minor for something new,
   and while the version is 0.x also minor for a breaking change, with what a repository must change written in it.
-- Agents never publish, log in to npm or NuGet, or push a release. CI publishes the CLI with npm trusted publishing after
-  the owner merges the "Version Packages" pull request, and the .NET packages with NuGet trusted publishing after the owner pushes the tag `nuget-v<version>` ([docs/ci.md](docs/ci.md), [docs/first-release.md](docs/first-release.md)).
+- Only CI publishes: nobody logs in to npm or NuGet. CI publishes the CLI with npm trusted publishing after the "Version Packages"
+  pull request is merged, and the .NET packages with NuGet trusted publishing after the tag `nuget-v<version>` is pushed; an agent may do either ([docs/ci.md](docs/ci.md), [docs/first-release.md](docs/first-release.md)).
 
 ## Rules
 
