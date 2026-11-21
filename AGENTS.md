@@ -14,6 +14,9 @@ every repository that installs them.
 - For agents: `node src/cli.ts check --quick` while working, `node src/cli.ts check` before calling a change done. Both
   run suwgate on itself, from the sources, with the profiles `library` and `dotnet` of `suwgate.yml`.
 - `node src/cli.ts step <id> [-- <args>]` runs one step with the steps it needs, e.g. `node src/cli.ts step unit-tests -- -t "name"`.
+- Test last: finish every change of the task, then run the full gate once and push once, so CI runs once. After a red run, fix
+  all it shows, rerun only the tests that failed, and the full gate once when they pass. Quick checks of the part you change
+  (its unit tests, the type checker, one step) are fine while building.
 - `node src/cli.ts --help` describes every command; `dotnet test` and `dotnet pack Suwgate.slnx -o .artifacts/nupkg` run the .NET side alone.
 
 ## Git
