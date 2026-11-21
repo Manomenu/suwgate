@@ -1,5 +1,11 @@
 # @maniumek/suwgate
 
+## 0.9.0
+
+### Minor Changes
+
+- 4058837: The shared rules for agents: suwgate ships `AGENTS.shared.md`, `suwgate agents-shared` writes it into the repository root, and the new `agents-shared` guard fails while the copy differs from the shipped one or `AGENTS.md` lacks the line `Read @AGENTS.shared.md first: the rules every repository of the stack shares. This file adds this repository's own and wins where it says otherwise.` A repository must run `suwgate agents-shared`, add that line to `AGENTS.md`, and delete from `AGENTS.md` what the shared file now says.
+
 ## 0.8.0
 
 ### Minor Changes
