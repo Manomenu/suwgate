@@ -59,6 +59,16 @@ switch timer suw-ci-runner-switch.timer (active/waiting): last run Fri 2026-11-2
 - User services run only while the owner is logged in, unless lingering is on: `loginctl show-user "$USER" -p Linger`, and
   `loginctl enable-linger "$USER"` to turn it on.
 
+## Awake while a job runs
+
+A job only finishes while the machine is awake: a laptop that suspends, or closes its lid, loses the job. The runner's job hooks
+(`ACTIONS_RUNNER_HOOK_JOB_STARTED` and `ACTIONS_RUNNER_HOOK_JOB_COMPLETED` in its `.env`, docs.github.com "Running scripts before
+or after a job") are two-line scripts in the runner's folder that call `runner-switch.sh job-started` and `job-completed`, which
+start and stop the user service `ci-job-awake@<repository>`, which holds a systemd-inhibit lock on sleep, idle and
+the lid switch. Between jobs nothing is held and the machine sleeps as usual. The lock ends after 6 hours, the longest a job may
+run, and when the runner's service stops, so a job cancelled without its completed hook cannot keep the machine awake for good.
+`systemd-inhibit --list` shows the lock; `status` names the repositories it is held for.
+
 ## What a job shares with the owner
 
 The runner is the owner's user on the owner's machine. suwgate's gate on it behaves as `suwgate check` run by hand in the main
@@ -92,6 +102,12 @@ Only the owner can push to these repositories. Do not add a runner to a reposito
     (cd "$dir" && ./config.sh --unattended --url "https://github.com/<owner>/$repository" --token "$token" \
         --name "$(hostname)-$repository" --labels suw-local --work _work --replace)
     systemctl --user show-environment | sed -n 's/^PATH=//p' > "$dir/.path"
+    for hook in job-started job-completed; do
+        printf '#!/bin/sh\nexec %s %s\n' "$PWD/runner-switch.sh" "$hook" > "$dir/$hook.sh" && chmod +x "$dir/$hook.sh"
+    done
+    printf 'ACTIONS_RUNNER_HOOK_JOB_STARTED=%s\nACTIONS_RUNNER_HOOK_JOB_COMPLETED=%s\n' \
+        "$dir/job-started.sh" "$dir/job-completed.sh" >> "$dir/.env"
+    install -Dm644 ci-job-awake@.service ~/.config/systemd/user/ci-job-awake@.service
     install -Dm644 actions-runner@.service ~/.config/systemd/user/actions-runner@.service
     systemctl --user daemon-reload && systemctl --user enable --now "actions-runner@$repository"
     ```
@@ -99,10 +115,14 @@ Only the owner can push to these repositories. Do not add a runner to a reposito
 3. The switch:
 
     ```sh
-    printf 'REPOSITORIES=<name>,<name>\nOPTIONS=\n' > ~/.config/suw-ci-runner-switch.env
+    printf 'REPOSITORIES=<name>,<name>\nOPTIONS=\nPATH=%s\n' "$(systemctl --user show-environment | sed -n 's/^PATH=//p')" \
+        > ~/.config/suw-ci-runner-switch.env
     install -m644 suw-ci-runner-switch.service suw-ci-runner-switch.timer ~/.config/systemd/user/
     systemctl --user daemon-reload && systemctl --user enable --now suw-ci-runner-switch.timer
     ```
+
+    The file pins `PATH` because, with linger, the user manager starts at boot before the login that adds the owner's
+    tool folders to its environment, and the first run would not find `gh`.
 
     `OPTIONS=--included 3000` in the same file passes more options; `just ci-runner-switch` runs it by hand (with the
     repositories of that file unless `--repositories` names others), `journalctl --user -u suw-ci-runner-switch` shows what it
