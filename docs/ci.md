@@ -14,8 +14,7 @@ pins, tool versions) is fixed here. `gate.yml` derives the rest: the runner is `
 `CI_RUNNER` ([self-hosted fallback](#self-hosted-fallback)), else `ubuntu-24.04`; the command is `suwgate check --verbose` from the
 `node_modules` of `working-directory`; the .NET SDK comes with a `global.json`, oasdiff with a tracked `openapi.json`; the gate's own
 `database-up` step starts the database, in CI as on a laptop (`suwgate dev db up` with a `dev` section, which runs `dev.database.up`
-where a repository has its own script). The inputs `dotnet`, `oasdiff`, `database`, `database-command`, `browser-install-command`
-and `browser-deps-command` still work in this release, so the callers move one by one, and go in the next minor release.
+where a repository has its own script).
 
 `gate.yml` outputs `proven`: `true` when the push's tree had already passed and the gate was skipped.
 
