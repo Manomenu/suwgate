@@ -200,7 +200,7 @@ Shared rules for all five:
 
 - May change: `src/guards/repository/**` (where `required-files` lives), `src/session/**`, `.githooks/**`, `.claude/settings.json`
   (through the owner, it is a gate file).
-- Guards: `agents-file`, `docs-paths`, `forbidden-names`, `repository-layout`, `scripts-called`, `scripts-help`, `just-modules`,
+- Guards: `agents-file`, `agents-shared`, `docs-paths`, `forbidden-names`, `repository-layout`, `scripts-called`, `scripts-help`, `just-modules`,
   `image-pins`, `compose-ports`, `vscode-settings`, `banned-npm-packages`, `no-raw-colors`; refine `required-files`; the edit hook's per-profile
   lists (characterization tests, existing migrations, generated files of a repository as `settings`) and its tests; decide
   `suwgate hook pre-commit`.

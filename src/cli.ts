@@ -7,13 +7,13 @@ import { dev } from "./dev/index.ts";
 import { loadConfig, type Catalog } from "./gate/config.ts";
 import { PROFILES } from "./gate/contract.ts";
 import { repositoryRoot } from "./gate/repository.ts";
-import { guards } from "./guards/index.ts";
+import { guards, SHARED_RULES, writeSharedRules } from "./guards/index.ts";
 import { dotnetGuards, stepsFor, verdict } from "./profiles/index.ts";
 import { guardEdit, type EditHookProject, type EditHookSettings } from "./session/guardEdit.ts";
 import { preCommit, runTool } from "./session/preCommit.ts";
 import { stop } from "./session/stop.ts";
 
-const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [--only] [--verbose] [-- <args>]] | suwgate hook <guard-edit|stop|pre-commit> | suwgate dev <command> | suwgate --help | --version
+const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [--only] [--verbose] [-- <args>]] | suwgate hook <guard-edit|stop|pre-commit> | suwgate dev <command> | suwgate agents-shared | suwgate --help | --version
   suwgate check            every step of the repository's profiles (suwgate.yml) and the repository guards
   suwgate check --quick    the guards, and the quick steps only for what changed since master; has a time budget
                            (SUWGATE_QUICK_LIMIT seconds, default 20) because the Stop hook runs it after every turn
@@ -30,6 +30,8 @@ const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [
   suwgate hook pre-commit  git pre-commit hook: gitleaks on the staged changes, then the quick gate
   suwgate dev <db|logs|smoke|server|tmux|checkout-env>
                            the local stack of the repository (the dev section of suwgate.yml); suwgate dev --help
+  suwgate agents-shared    writes AGENTS.shared.md, the rules every repository shares, as this suwgate ships it, into the
+                           repository root (the agents-shared guard fails until the copy is current)
   suwgate verdict <tests|guards|tsconfig|eslint> ...
                            what the steps call after their tool: did tests run, did the .NET guards run (evidence),
                            are the strict compiler options and the eslint rules in effect
@@ -114,6 +116,14 @@ async function main(argv: readonly string[]): Promise<number> {
         const result = await runCheck(process.cwd(), values.quick === true, values.verbose === true);
         (result.exitCode === 0 ? console.log : console.error)(result.text);
         return result.exitCode;
+    }
+    if (command === "agents-shared" && hook === undefined) {
+        const root = repositoryRoot(process.cwd()) ?? process.cwd();
+        const result = writeSharedRules(root);
+        console.log(
+            result === "written" ? `wrote ${SHARED_RULES} of suwgate ${version()}: commit it` : `${SHARED_RULES} is already current`,
+        );
+        return 0;
     }
     if (command === "hook" && rest.length === 0 && hook === "pre-commit") {
         const root = repositoryRoot(process.cwd()) ?? process.cwd();

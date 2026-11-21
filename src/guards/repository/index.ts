@@ -1,5 +1,6 @@
 import type { Guard } from "../../gate/contract.ts";
 import { agentsFile } from "./agentsFile.ts";
+import { agentsShared } from "./stackRules.ts";
 import { bannedNpmPackages } from "./bannedNpmPackages.ts";
 import { composePorts } from "./composePorts.ts";
 import { configContents } from "./configContents.ts";
@@ -23,6 +24,7 @@ export const repositoryGuards: readonly Guard[] = [
     requiredFiles,
     configContents,
     agentsFile,
+    agentsShared,
     docsPaths,
     forbiddenNames,
     repositoryLayout,

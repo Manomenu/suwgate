@@ -104,6 +104,20 @@ exec node_modules/.bin/suwgate hook pre-commit
   ([docs/adr/0001-suwgate-hook-pre-commit.md](docs/adr/0001-suwgate-hook-pre-commit.md)).
 - The `hooks` guard checks that these lines are there.
 
+## The shared rules for agents
+
+`AGENTS.shared.md` holds the rules every repository of the stack shares (git, test last, specs, names, secrets, no comments),
+so a change to one of them is one release of suwgate, not a pull request in every repository. suwgate ships it, and
+`suwgate agents-shared` writes it into the repository root. The `agents-shared` guard fails while the copy differs from the one
+the installed suwgate ships (after an upgrade: run the command and commit the copy), and while `AGENTS.md` lacks the line
+
+```text
+Read @AGENTS.shared.md first: the rules every repository of the stack shares. This file adds this repository's own and wins where it says otherwise.
+```
+
+outside a code block. Claude Code loads the file through the `@` (`CLAUDE.md` imports `AGENTS.md`, which imports it); every other
+agent follows the words. `AGENTS.md` keeps only what is the repository's own.
+
 ## Run one step
 
 `suwgate step <id>` runs one step of the plan with the steps it needs (its `after`, transitively, so `pnpm-install` and the
