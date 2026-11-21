@@ -29,10 +29,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: actions/setup-dotnet v6.0.0
+      - name: actions/setup-dotnet v6.0.0 (the NuGet cache on GitHub-hosted runners only; a self-hosted runner keeps its packages)
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('**/packages.lock.json') != '' }}
+          cache-dependency-path: "**/packages.lock.json"
       - name: Pack
         env:
           PACK_TARGET: ${{ inputs.pack-target }}

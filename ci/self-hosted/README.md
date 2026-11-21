@@ -72,12 +72,12 @@ run, and when the runner's service stops, so a job cancelled without its complet
 ## What a job shares with the owner
 
 The runner is the owner's user on the owner's machine. suwgate's gate on it behaves as `suwgate check` run by hand in the main
-checkout: `docker compose --profile db up -d --wait db` finds the owner's running development database (the compose project is
+checkout: its `database-up` step (`suwgate dev db up`) finds the owner's running development database (the compose project is
 named in `compose.yaml`) and the tests make their own databases in it. So a gate run by hand in the main checkout at the same
 time as a CI job of the same repository can collide (same test databases, same e2e ports); worktrees have their own. A job that
 starts a whole container stack must give it its own compose project and no host ports the development stack holds, or its
-`down --volumes` would remove the owner's development database: the callers' `build` jobs set `COMPOSE_PROJECT_NAME`,
-`IMAGE_TAG` and, where the database publishes a port, a `compose.ci.yaml` that drops it.
+`down --volumes` would remove the owner's development database: `suwgate dev smoke --ci` (the `smoke` input of `gate.yml`) runs the
+stack as the compose project `<dev.name>-ci` with the image tag `ci` and moves every published port to a free loopback port.
 
 Only the owner can push to these repositories. Do not add a runner to a repository that takes pull requests from others.
 

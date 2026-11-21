@@ -16,6 +16,8 @@ function environment(load: DevEnvironment["loadSettings"] = () => settingsOf()):
         interactive: false,
         ask: () => Promise.resolve(""),
         loadSettings: load,
+        temporaryFile: (name) => `/tmp/${name}`,
+        onInterrupt: () => () => undefined,
     };
     return { env, out, err };
 }

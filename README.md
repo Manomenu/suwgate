@@ -160,8 +160,7 @@ The settings of the steps:
 
 A database that is not the compose service `db` (a `docker run` container that also creates a database per tenant) is named
 once, in the `dev` section: `dev.database.up` and `dev.database.psql` ([docs/dev.md](docs/dev.md)). `suwgate dev db up`, the
-`database-up` step and the `e2e` step run them instead of docker compose; in CI, the `database-command` input of `gate.yml`
-([docs/ci.md](docs/ci.md)).
+`database-up` step and the `e2e` step run them instead of docker compose, in CI as well ([docs/ci.md](docs/ci.md)).
 
 ### The steps of the profiles
 

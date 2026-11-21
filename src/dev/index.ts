@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import { askOnTerminal, DB_USAGE, parseDb, runDb } from "./db.ts";
 import { CHECKOUT_ENV_USAGE, runCheckoutEnv } from "./checkoutEnv.ts";
@@ -6,14 +9,14 @@ import { LOGS_USAGE, parseLogs, runLogs } from "./logs.ts";
 import { exec, Failure, UsageError, type Exec, type Io } from "./process.ts";
 import { runServer, SERVER_USAGE } from "./server.ts";
 import { loadSettings, type DevSettings } from "./settings.ts";
-import { parseSmoke, realFetch, runSmoke, SMOKE_USAGE, type Fetch } from "./smoke.ts";
+import { parseSmoke, realFetch, runSmoke, runSmokeCi, SMOKE_USAGE, type Fetch, type SmokeCiEnvironment } from "./smoke.ts";
 import { parseTmux, runTmux, TMUX_USAGE } from "./tmux.ts";
 
 export const DEV_USAGE = `usage: suwgate dev <db|logs|smoke|server|tmux|checkout-env> [arguments]   (every one takes --help)
 The dev scripts of the template as commands, configured by the dev section of suwgate.yml:
   db            the local PostgreSQL of the compose file: up | down | reset | psql | logs | status
   logs          why did it fail? the last warnings and errors of the server's JSON log
-  smoke         read-only requests against a running stack
+  smoke         read-only requests against a running stack; --ci builds and starts its own stack first
   server        the server under dotnet watch, restarted when it exits
   tmux          the whole local stack in one tmux session: start [--restart] | stop
   checkout-env  eval "$(suwgate dev checkout-env)": own test databases and e2e ports for a linked worktree`;
@@ -37,6 +40,8 @@ export interface DevEnvironment {
     interactive: boolean;
     ask: (question: string) => Promise<string>;
     loadSettings: (cwd: string) => DevSettings;
+    temporaryFile: SmokeCiEnvironment["temporaryFile"];
+    onInterrupt: SmokeCiEnvironment["onInterrupt"];
 }
 
 function repositoryRootOf(cwd: string): string {
@@ -45,6 +50,31 @@ function repositoryRootOf(cwd: string): string {
     } catch {
         return cwd;
     }
+}
+
+function temporaryFile(name: string, text: string): string {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "suwgate-")), name);
+    writeFileSync(file, text);
+    return file;
+}
+
+const INTERRUPTED = 130;
+
+function onInterrupt(cleanup: readonly string[]): () => void {
+    const [program = "", ...args] = cleanup;
+    const stop = (): void => {
+        try {
+            execFileSync(program, args, { stdio: "inherit" });
+        } finally {
+            process.exit(INTERRUPTED);
+        }
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+    return () => {
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+    };
 }
 
 function realEnvironment(): DevEnvironment {
@@ -58,6 +88,8 @@ function realEnvironment(): DevEnvironment {
         interactive: process.stdin.isTTY,
         ask: askOnTerminal,
         loadSettings: (cwd) => loadSettings(repositoryRootOf(cwd)),
+        temporaryFile,
+        onInterrupt,
     };
 }
 
@@ -77,8 +109,19 @@ async function dispatch(command: string, args: readonly string[], environment: D
         }
         case "logs":
             return runLogs(parseLogs(args), settings(), environment.exec, io, environment.cwd);
-        case "smoke":
-            return runSmoke(parseSmoke(args), settings(), environment.fetch, io);
+        case "smoke": {
+            const parsed = parseSmoke(args);
+            if (!parsed.ci) return runSmoke(parsed, settings(), environment.fetch, io);
+            const { exec, fetch } = environment;
+            return runSmokeCi({
+                settings: settings(),
+                exec,
+                fetch,
+                io,
+                temporaryFile: environment.temporaryFile,
+                onInterrupt: environment.onInterrupt,
+            });
+        }
         case "server":
             return runServer(args, settings(), io);
         case "tmux":

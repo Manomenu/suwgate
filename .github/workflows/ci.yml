@@ -11,18 +11,15 @@ permissions: {}
 env:
   NODE_VERSION: 24.22.1
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   gate:
     permissions:
       contents: read
+      statuses: write
+      pull-requests: read
     uses: ./.github/workflows/gate.yml
     with:
       command: node src/cli.ts check --verbose
-      dotnet: true
 
   release:
     if: github.ref == 'refs/heads/master'

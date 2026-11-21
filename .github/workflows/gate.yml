@@ -4,13 +4,13 @@ on:
   workflow_call:
     inputs:
       runs-on:
-        description: The runner label of the job, e.g. a self-hosted runner's label while the account's Actions minutes are used up
+        description: The runner label of every job; empty takes the caller's repository variable CI_RUNNER (the self-hosted fallback), else ubuntu-24.04
         type: string
-        default: ubuntu-24.04
+        default: ""
       command:
-        description: The command that runs the gate from the repository root
+        description: The command that runs the gate from the repository root; empty runs suwgate check --verbose from the node_modules of working-directory
         type: string
-        default: pnpm exec suwgate check --verbose
+        default: ""
       node-version:
         type: string
         default: 24.22.1
@@ -18,45 +18,117 @@ on:
         description: Folder of the package.json and the lockfile when they are not in the repository root
         type: string
         default: .
-      dotnet:
-        description: Install the SDK pinned by global.json
-        type: boolean
-        default: false
-      browser-install-command:
-        description: Command that installs the browser for the tests, empty for none
+      browser:
+        description: The Playwright browser the tests need, e.g. chromium, empty for none; its system packages are installed on GitHub-hosted runners only, a self-hosted runner brings its own
         type: string
         default: ""
-      browser-deps-command:
-        description: Command that installs the browser's system packages, run on GitHub-hosted runners only (a self-hosted runner brings its own), empty for none
+      smoke:
+        description: Build the compose stack and smoke-test it with suwgate dev smoke --ci, beside the gate on a GitHub-hosted runner and after it on a self-hosted one
+        type: boolean
+        default: false
+      smoke-env:
+        description: Variables the smoke test's compose stack needs, one NAME=value per line
         type: string
         default: ""
-      database:
-        description: Start the database of the tests before the gate, with database-command
-        type: boolean
-        default: false
-      database-command:
-        description: The command that starts the database and returns once it answers, run from the repository root when database is true
-        type: string
-        default: docker compose --profile db up -d --wait db
-      oasdiff:
-        description: Install oasdiff next to gitleaks and shellcheck
-        type: boolean
-        default: false
       failure-artifacts:
         description: Paths kept as the artifact gate-failure when the gate fails (visual diffs, reports), one per line
         type: string
         default: |
           visual/results
           .artifacts/e2e
+      dotnet:
+        description: Deprecated, removed in the next minor release; the SDK of global.json is installed whenever the repository has a global.json
+        type: boolean
+        default: false
+      oasdiff:
+        description: Deprecated, removed in the next minor release; oasdiff is installed whenever the repository tracks an openapi.json
+        type: boolean
+        default: false
+      browser-install-command:
+        description: Deprecated, removed in the next minor release; use browser
+        type: string
+        default: ""
+      browser-deps-command:
+        description: Deprecated, removed in the next minor release; use browser
+        type: string
+        default: ""
+      database:
+        description: Deprecated, removed in the next minor release; the gate's database-up step starts the database, in CI as well
+        type: boolean
+        default: false
+      database-command:
+        description: Deprecated, removed in the next minor release, with database
+        type: string
+        default: docker compose --profile db up -d --wait db
+    outputs:
+      proven:
+        description: true when this push's tree had already passed (a ci/tree stamp of the same tree), so the gate and the smoke test were skipped
+        value: ${{ jobs.proof.outputs.proven }}
 
 permissions: {}
 
 jobs:
-  gate:
-    runs-on: ${{ inputs.runs-on }}
-    timeout-minutes: 30
+  proof:
+    runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 5
     permissions:
       contents: read
+      statuses: read
+      pull-requests: read
+    outputs:
+      proven: ${{ steps.proof.outputs.proven }}
+      tree: ${{ steps.proof.outputs.tree }}
+      hosted: ${{ steps.proof.outputs.hosted }}
+    steps:
+      - name: Has this push's tree already passed? (a green ci/tree stamp of the same tree on this commit or on the head of its merged pull request; any doubt runs the full gate)
+        id: proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          HOSTED: ${{ runner.environment == 'github-hosted' }}
+        run: |
+          set -uo pipefail
+          echo "hosted=$HOSTED" >> "$GITHUB_OUTPUT"
+          tree="$(gh api "repos/$REPOSITORY/git/commits/$SHA" --jq .tree.sha)" || tree=""
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+          stamped() {
+            local descriptions
+            descriptions="$(gh api "repos/$REPOSITORY/commits/$1/statuses?per_page=100" \
+              --jq '.[] | select(.context == "ci/tree" and .state == "success") | .description')" && grep -qxF "$tree" <<< "$descriptions"
+          }
+          proven=false
+          if [ "$EVENT" = push ] && [ -n "$tree" ]; then
+            if stamped "$SHA"; then
+              proven=true
+              echo "proven: $SHA carries a green ci/tree stamp of its tree $tree"
+            else
+              heads="$(gh api "repos/$REPOSITORY/commits/$SHA/pulls" --jq '.[] | select(.merged_at != null) | .head.sha')" || heads=""
+              for head in $heads; do
+                if stamped "$head"; then
+                  proven=true
+                  echo "proven: the head $head of the merged pull request carries a green ci/tree stamp of this tree $tree"
+                  break
+                fi
+              done
+            fi
+          fi
+          [ "$proven" = true ] || echo "not proven: the gate runs in full (event $EVENT, tree ${tree:-unknown})"
+          echo "proven=$proven" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: proof
+    if: ${{ !cancelled() && needs.proof.outputs.proven != 'true' }}
+    runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    concurrency:
+      group: suwgate-gate-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    outputs:
+      tree: ${{ steps.repository.outputs.tree }}
     env:
       CI: "1"
     steps:
@@ -65,29 +137,50 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: What the repository needs, and the tree under test
+        id: repository
+        run: |
+          set -euo pipefail
+          echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+          if [ -n "$(git ls-files '*openapi.json')" ]; then echo "openapi=true" >> "$GITHUB_OUTPUT"; fi
       - name: pnpm/action-setup v6.1.1
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
         with:
           package_json_file: ${{ inputs.working-directory }}/package.json
-      - name: actions/setup-node v7.1.0
+      - name: actions/setup-node v7.1.0 (the pnpm cache on GitHub-hosted runners only; a self-hosted runner keeps its store)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: ${{ inputs.node-version }}
-          cache: pnpm
+          cache: ${{ runner.environment == 'github-hosted' && 'pnpm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
-      - name: actions/setup-dotnet v6.0.0
-        if: inputs.dotnet
+      - name: actions/setup-dotnet v6.0.0 (the NuGet cache on GitHub-hosted runners only; a self-hosted runner keeps its packages)
+        if: inputs.dotnet || hashFiles('global.json') != ''
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('**/packages.lock.json') != '' }}
+          cache-dependency-path: "**/packages.lock.json"
       - name: Install the packages
         working-directory: ${{ inputs.working-directory }}
         run: pnpm install --frozen-lockfile
-      - name: Install the browser's system packages (GitHub-hosted runners only)
+      - name: Install the browser's system packages (GitHub-hosted runners only; a self-hosted runner brings its own)
+        if: inputs.browser != '' && runner.environment == 'github-hosted'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          BROWSER: ${{ inputs.browser }}
+        run: pnpm exec playwright install-deps "$BROWSER"
+      - name: Install the browser
+        if: inputs.browser != ''
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          BROWSER: ${{ inputs.browser }}
+        run: pnpm exec playwright install "$BROWSER"
+      - name: Install the browser's system packages (deprecated input browser-deps-command)
         if: inputs.browser-deps-command != '' && runner.environment == 'github-hosted'
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.browser-deps-command }}
-      - name: Install the browser
+      - name: Install the browser (deprecated input browser-install-command)
         if: inputs.browser-install-command != ''
         working-directory: ${{ inputs.working-directory }}
         run: ${{ inputs.browser-install-command }}
@@ -105,8 +198,8 @@ jobs:
           echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  shellcheck.tar.xz" | sha256sum --check
           tar -xJf shellcheck.tar.xz
           install shellcheck-v0.11.0/shellcheck bin/shellcheck
-      - name: Install oasdiff (pinned, checksum verified, next to gitleaks)
-        if: inputs.oasdiff
+      - name: Install oasdiff (pinned, checksum verified, next to gitleaks) when the repository tracks an openapi.json
+        if: inputs.oasdiff || steps.repository.outputs.openapi == 'true'
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
@@ -114,11 +207,20 @@ jobs:
           echo "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140  oasdiff.tar.gz" | sha256sum --check
           tar -xzf oasdiff.tar.gz oasdiff
           install oasdiff bin/oasdiff
-      - name: The database of the tests (database-command)
+      - name: The database of the tests (deprecated inputs database and database-command)
         if: inputs.database
         run: ${{ inputs.database-command }}
       - name: The gate
-        run: ${{ inputs.command }}
+        run: ${{ inputs.command || format('"{0}/node_modules/.bin/suwgate" check --verbose', inputs.working-directory) }}
+      - name: The stack, built and smoke-tested after the gate on a self-hosted runner (suwgate dev smoke --ci)
+        if: inputs.smoke && needs.proof.outputs.hosted != 'true'
+        env:
+          SMOKE_ENV: ${{ inputs.smoke-env }}
+          SUWGATE: ${{ inputs.working-directory }}/node_modules/.bin/suwgate
+        run: |
+          set -euo pipefail
+          while IFS= read -r variable; do [ -z "$variable" ] || export "${variable?}"; done <<< "$SMOKE_ENV"
+          "$SUWGATE" dev smoke --ci
       - name: Keep the failure files (actions/upload-artifact v7.0.2)
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -126,3 +228,78 @@ jobs:
           name: gate-failure
           path: ${{ inputs.failure-artifacts }}
           if-no-files-found: ignore
+
+  stack:
+    needs: proof
+    if: inputs.smoke && needs.proof.outputs.hosted == 'true' && needs.proof.outputs.proven != 'true'
+    runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    concurrency:
+      group: suwgate-stack-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+    outputs:
+      tree: ${{ steps.tree.outputs.tree }}
+    env:
+      CI: "1"
+    steps:
+      - name: actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: The tree under test
+        id: tree
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - name: pnpm/action-setup v6.1.1
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+        with:
+          package_json_file: ${{ inputs.working-directory }}/package.json
+      - name: actions/setup-node v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+          cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
+      - name: Install the packages (for suwgate)
+        working-directory: ${{ inputs.working-directory }}
+        run: pnpm install --frozen-lockfile
+      - name: The stack, built and smoke-tested beside the gate on a GitHub-hosted runner (suwgate dev smoke --ci)
+        env:
+          SMOKE_ENV: ${{ inputs.smoke-env }}
+          SUWGATE: ${{ inputs.working-directory }}/node_modules/.bin/suwgate
+        run: |
+          set -euo pipefail
+          while IFS= read -r variable; do [ -z "$variable" ] || export "${variable?}"; done <<< "$SMOKE_ENV"
+          "$SUWGATE" dev smoke --ci
+
+  stamp:
+    needs: [proof, gate, stack]
+    if: >-
+      ${{ !cancelled() && needs.proof.result == 'success' && needs.proof.outputs.tree != ''
+      && (needs.gate.result == 'success' || (needs.gate.result == 'skipped' && needs.proof.outputs.proven == 'true'))
+      && (needs.stack.result == 'success' || needs.stack.result == 'skipped') }}
+    runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Stamp the tree that passed as the commit status ci/tree (on a pull request its head, on a push the commit), so a push of the same tree skips the gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET: ${{ github.event.pull_request.head.sha || github.sha }}
+          PROVEN_TREE: ${{ needs.proof.outputs.tree }}
+          GATE_TREE: ${{ needs.gate.outputs.tree }}
+          STACK_TREE: ${{ needs.stack.outputs.tree }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          tree="${GATE_TREE:-$PROVEN_TREE}"
+          if [ "$tree" != "$PROVEN_TREE" ] || { [ -n "$STACK_TREE" ] && [ "$STACK_TREE" != "$tree" ]; }; then
+            echo "::warning::no ci/tree stamp: the jobs saw different trees (commit $PROVEN_TREE, gate ${GATE_TREE:-none}, stack ${STACK_TREE:-none}), so the next push runs the full gate"
+            exit 0
+          fi
+          gh api -X POST "repos/$REPOSITORY/statuses/$TARGET" -f state=success -f context=ci/tree -f description="$tree" -f target_url="$RUN_URL" --silent \
+            && echo "stamped $TARGET with the tree $tree" \
+            || echo "::warning::no ci/tree stamp on $TARGET (the token may not write statuses, e.g. on a fork's pull request), so the next push of this tree runs the full gate"

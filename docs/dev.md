@@ -9,7 +9,7 @@ between repositories (names, ports, folders) from `suwgate.yml`. Nothing app-spe
 ```sh
 suwgate dev db up|down|reset|psql|logs|status   # the local PostgreSQL of the compose file, or of dev.database.up and psql
 suwgate dev logs [--all] [--trace <id>] [--compose] [-n N] [--file <path>]
-suwgate dev smoke [<base-url>]
+suwgate dev smoke [<base-url> | --ci]
 suwgate dev server [dotnet run arguments]
 suwgate dev tmux start [--restart] | stop
 eval "$(suwgate dev checkout-env)"
@@ -71,6 +71,12 @@ and suwageval -70.
   trace, message, and the first line of an exception). `--all` shows every level, `--trace <id>` every line of one request (a bare
   32-digit traceId or the W3C `traceparent` form), `--compose` reads `docker compose logs` of the server service.
 - `smoke` makes read-only requests through the stack's web and reports what failed and what to look at.
+- `smoke --ci` is the smoke test of CI (`smoke: true` of the reusable `gate.yml`): it builds the images and starts the whole stack of
+  the compose file itself, as the compose project `<name>-ci` with the image tag `ci`, so a stack the developer or another job runs on
+  the same machine keeps its containers, volumes and images. Every published port moves to a free port on the loopback, through an
+  override generated from `docker compose config` (no `compose.ci.yaml` in the repository); the smoke test goes to the port that
+  stands for `ports.stack`. It prints the logs when anything fails and always ends with `down --remove-orphans --volumes`, also when
+  the job is cancelled. Variables the stack needs (for example a model the server must name) come from the environment.
 - `server` loads `.env` of the repository root, runs `dotnet watch` on the server project and tees the output to the log file.
   An edit that hot reload cannot apply restarts the app without asking; when `dotnet watch` exits it starts again after a pause that
   doubles from 2 to 60 seconds while it keeps failing within a minute. Ctrl+C stops it.

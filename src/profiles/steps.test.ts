@@ -412,6 +412,20 @@ describe("database-up and compose", () => {
 
         expect(line(step("database-up").run, own)).toContain("dev db up");
     });
+
+    it("start the compose database through suwgate dev db up when there is a dev section, so its extra services come up too", () => {
+        const dev = context(repository({ "compose.yaml": "services: {}", "suwgate.yml": "profiles: [database]\ndev:\n  name: x\n" }));
+
+        expect(line(step("database-up").run, dev)).toContain("dev db up");
+    });
+
+    it("start the database in CI as well, so no workflow has to start it before the gate", () => {
+        const composed = context(repository({ "compose.yaml": "services: {}" }));
+        const dev = context(repository({ "compose.yaml": "services: {}", "suwgate.yml": "profiles: [database]\ndev:\n  name: x\n" }));
+
+        expect(line(step("database-up").run, composed)).not.toContain("CI");
+        expect(line(step("database-up").run, dev)).not.toContain("CI");
+    });
 });
 
 const PASSED_PLAYWRIGHT = JSON.stringify({

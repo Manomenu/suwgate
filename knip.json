@@ -2,5 +2,6 @@
     "$schema": "https://unpkg.com/knip@6/schema.json",
     "entry": ["src/cli.ts", "src/eslint/index.ts", "src/profiles/presets/*.ts", "!src/profiles/presets/*.test.ts"],
     "project": ["src/**/*.ts"],
-    "ignoreDependencies": ["@arethetypeswrong/cli", "publint"]
+    "ignoreDependencies": ["@arethetypeswrong/cli", "publint"],
+    "ignoreBinaries": ["playwright"]
 }
