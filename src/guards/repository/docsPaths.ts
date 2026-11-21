@@ -6,7 +6,7 @@ import { baseName, lineAt, matchesAny, stringList } from "./text.ts";
 const MENTION = /`([\w.\-/@]+)`|\]\(([\w.\-/]+)(?:#[\w-]*)?\)/g;
 const FILE_NAME = /[\w-]\.(cs|csproj|css|json|md|props|sh|slnx|sql|ts|tsx|txt|yaml|yml)$/;
 const NOT_IN_THE_REPOSITORY = ["CLAUDE.local.md", "dist/"];
-const NOT_READ = ["docs/visual/**", ".changeset/**"];
+const NOT_READ = ["docs/visual/**", ".changeset/**", "AGENTS.shared.md"];
 export const DOTNET_GUARD_IDS = [
     "architecture/build-settings",
     "architecture/endpoints",

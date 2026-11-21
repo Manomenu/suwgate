@@ -1,4 +1,5 @@
 import { PROFILES, type Guard, type Profile } from "../../gate/contract.ts";
+import { SHARED_RULES } from "./stackRules.ts";
 import { matchesAny, stringList } from "./text.ts";
 
 const EVERY_REPOSITORY = [
@@ -26,7 +27,7 @@ export const FORBIDDEN_BY_PROFILE: Readonly<Record<Profile, readonly string[]>> 
 
 const FOLDERS_ONLY = ["base"];
 
-const NOT_READ = ["docs/visual/**"];
+const NOT_READ = ["docs/visual/**", SHARED_RULES];
 
 interface Settings {
     words?: string[];

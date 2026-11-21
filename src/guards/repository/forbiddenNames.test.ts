@@ -57,6 +57,12 @@ describe("forbidden-names", () => {
         ]);
     });
 
+    it("leaves AGENTS.shared.md alone, a name suwgate gives every repository", async () => {
+        expect(await findingsOf(forbiddenNames, { "AGENTS.shared.md": "", "src/shared.ts": "" })).toEqual([
+            expect.objectContaining({ target: "src/shared.ts" }),
+        ]);
+    });
+
     it("lets a file carry Base, as a type may, and refuses it as a folder or project, as a namespace segment", async () => {
         const files = {
             "Myapp.Server/KnowledgeBases/KnowledgeBaseView.cs": "",
