@@ -36,30 +36,6 @@ on:
         default: |
           visual/results
           .artifacts/e2e
-      dotnet:
-        description: Deprecated, removed in the next minor release; the SDK of global.json is installed whenever the repository has a global.json
-        type: boolean
-        default: false
-      oasdiff:
-        description: Deprecated, removed in the next minor release; oasdiff is installed whenever the repository tracks an openapi.json
-        type: boolean
-        default: false
-      browser-install-command:
-        description: Deprecated, removed in the next minor release; use browser
-        type: string
-        default: ""
-      browser-deps-command:
-        description: Deprecated, removed in the next minor release; use browser
-        type: string
-        default: ""
-      database:
-        description: Deprecated, removed in the next minor release; the gate's database-up step starts the database, in CI as well
-        type: boolean
-        default: false
-      database-command:
-        description: Deprecated, removed in the next minor release, with database
-        type: string
-        default: docker compose --profile db up -d --wait db
     outputs:
       proven:
         description: true when this push's tree had already passed (a ci/tree stamp of the same tree), so the gate and the smoke test were skipped
@@ -155,7 +131,7 @@ jobs:
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
           cache-dependency-path: ${{ inputs.working-directory }}/pnpm-lock.yaml
       - name: actions/setup-dotnet v6.0.0 (the NuGet cache on GitHub-hosted runners only; a self-hosted runner keeps its packages)
-        if: inputs.dotnet || hashFiles('global.json') != ''
+        if: hashFiles('global.json') != ''
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
@@ -176,14 +152,6 @@ jobs:
         env:
           BROWSER: ${{ inputs.browser }}
         run: pnpm exec playwright install "$BROWSER"
-      - name: Install the browser's system packages (deprecated input browser-deps-command)
-        if: inputs.browser-deps-command != '' && runner.environment == 'github-hosted'
-        working-directory: ${{ inputs.working-directory }}
-        run: ${{ inputs.browser-deps-command }}
-      - name: Install the browser (deprecated input browser-install-command)
-        if: inputs.browser-install-command != ''
-        working-directory: ${{ inputs.working-directory }}
-        run: ${{ inputs.browser-install-command }}
       - name: Install gitleaks and shellcheck (pinned, checksum verified, in the runner's temp folder because the repository guards count every untracked file, and without root so a self-hosted runner needs no sudo), so the gate never skips them
         working-directory: ${{ runner.temp }}
         run: |
@@ -199,7 +167,7 @@ jobs:
           tar -xJf shellcheck.tar.xz
           install shellcheck-v0.11.0/shellcheck bin/shellcheck
       - name: Install oasdiff (pinned, checksum verified, next to gitleaks) when the repository tracks an openapi.json
-        if: inputs.oasdiff || steps.repository.outputs.openapi == 'true'
+        if: steps.repository.outputs.openapi == 'true'
         working-directory: ${{ runner.temp }}
         run: |
           set -euo pipefail
@@ -207,9 +175,6 @@ jobs:
           echo "a8023002fcb2eaa7f5758148a9303cb63d33b939886df312268bc0fc7b939140  oasdiff.tar.gz" | sha256sum --check
           tar -xzf oasdiff.tar.gz oasdiff
           install oasdiff bin/oasdiff
-      - name: The database of the tests (deprecated inputs database and database-command)
-        if: inputs.database
-        run: ${{ inputs.database-command }}
       - name: The gate
         run: ${{ inputs.command || format('"{0}/node_modules/.bin/suwgate" check --verbose', inputs.working-directory) }}
       - name: The stack, built and smoke-tested after the gate on a self-hosted runner (suwgate dev smoke --ci)
