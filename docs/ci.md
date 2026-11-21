@@ -143,6 +143,28 @@ talk to the registry. The token then always names the caller's own workflow file
 registry's docs show for a plain workflow, and no rule depends on undocumented behaviour. The cost is a publish job of a few lines in
 every releasing repository.
 
+## Renovate: one pull request a week per repository
+
+The workflow `renovate.yml` runs Renovate itself (renovatebot/github-action) on GitHub's runners of this public repository, so
+no server and no laptop keeps it running. It takes a token of the release GitHub App, so it reaches the private repositories as
+well, and its pushes start their CI. `.github/renovate-global.json` lists the repositories and the one command a post-upgrade
+task may run; `renovate/default.json` is the shared preset every repository gets from it (no repository needs a `renovate.json`).
+
+- New and updated pull requests only on Monday before 6:00 Warsaw time (`schedule`): every dependency of a repository, ours and
+  third-party, majors too, in one pull request that jumps straight to the latest versions (`group:all`). A version released
+  during the week updates the open pull request instead of opening another.
+- Renovate merges a pull request itself once its checks are green, on one of its runs every six hours (`platformAutomerge: false`:
+  GitHub's own auto-merge needs required status checks, which a private repository on the free plan cannot have, and without them
+  it could merge before CI ran). A red pull request stays open: fix it on its branch with what the changesets of the new versions
+  say a repository must change.
+- An upgrade of `@maniumek/suwgate` runs `suwgate agents-shared` of the new version, so the pull request carries the new
+  `AGENTS.shared.md` and the `agents-shared` guard stays green.
+- Run it by hand from the Actions tab (or `gh workflow run renovate.yml -R Manomenu/suwgate -f now=true`): `now` opens and updates
+  pull requests at once, outside the Monday schedule.
+- Security updates skip the schedule (`vulnerabilityAlerts`) once a repository has Dependabot alerts on.
+- What the App needs, besides what the releases use: Administration read, Checks, Commit statuses, Issues and Workflows read and
+  write, Dependabot alerts read, and an installation on every repository the global config lists.
+
 ## Pinning
 
 A caller pins the reusable workflow to a commit of this repository, never to a branch:
