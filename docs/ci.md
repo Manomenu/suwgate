@@ -6,7 +6,7 @@ They are `workflow_call` workflows in `.github/workflows/` of this repository.
 | Workflow            | Does                                                                                                                                                                                                                                                                                                                     | Inputs                                                                                                          |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | `gate.yml`          | `proof` (has this push's tree already passed?), then the gate: checkout, pnpm, Node, .NET when there is a `global.json`, the browser, gitleaks and shellcheck (and oasdiff when an `openapi.json` is tracked) with checksums, `suwgate check`; the stack smoke test when asked; `stamp`; on failure keeps `gate-failure` | `runs-on`, `command`, `node-version`, `working-directory`, `browser`, `smoke`, `smoke-env`, `failure-artifacts` |
-| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                                                                                                                                      | `runs-on`, `node-version`, `build-command`                                                                      |
+| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                                                                                                                                      | `runs-on`, `node-version`, `build-command`; secret `release-app-private-key`                                    |
 | `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                                                                                                                              | `runs-on`, `pack-target`                                                                                        |
 
 Inputs exist only for what differs between repositories and cannot be read from the repository. Everything else (timeouts, action
@@ -66,11 +66,13 @@ the server must name and never calls, for example). The registry push of a repos
 
 ## The "Version Packages" pull request
 
-The pull request that `release-npm.yml` opens is created with the workflow's `GITHUB_TOKEN`, and GitHub documents that such a pull
-request's `opened` and `synchronize` "create workflow runs that require approval" (Events that trigger workflows, `pull_request`).
-A run nobody approves expires as a failure without jobs when the pull request is merged; no trigger or permission in the workflow can
-avoid it, because the approval comes before any job's `if`. Approve the run on the pull request page before merging: its green run
-stamps the tree, so the push after the merge is proven and the release jobs start at once.
+A pull request opened with the workflow's `GITHUB_TOKEN` gets `pull_request` runs that "require approval" (Events that trigger
+workflows, `pull_request`), and a run nobody approves expires as a failure. So `release-npm.yml` opens it with a GitHub App's token
+when the caller has one (actions/create-github-app-token): the repository variable `RELEASE_APP_CLIENT_ID` holds the app's Client
+ID, and the caller passes the app's private key as the secret `release-app-private-key`. The app is installed on the repository
+with Contents and Pull requests read and write. Its pull request runs CI like any other, and its green run stamps the tree, so the
+push after the merge is proven and the release jobs start at once. Without the variable the workflow's own token opens it, and its
+run has to be approved on the pull request page before merging.
 
 ## Full history for a NuGet release
 
