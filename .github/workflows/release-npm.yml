@@ -13,6 +13,10 @@ on:
       build-command:
         type: string
         default: pnpm run build
+    secrets:
+      release-app-private-key:
+        description: The private key of the GitHub App whose token opens the Version Packages pull request, so its CI runs without an approval; its Client ID is the repository variable RELEASE_APP_CLIENT_ID. Without it the workflow's own token opens it
+        required: false
     outputs:
       mode:
         value: ${{ jobs.select-mode.outputs.mode }}
@@ -68,8 +72,19 @@ jobs:
           node-version: ${{ inputs.node-version }}
           package-manager-cache: false
       - run: pnpm install --frozen-lockfile
+      - name: actions/create-github-app-token v3.4.0
+        id: app-token
+        if: vars.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.release-app-private-key }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: changesets/action/version v2.1.2
         uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51
+        with:
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
 
   pack:
     if: needs.select-mode.outputs.mode == 'publish'

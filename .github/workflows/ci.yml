@@ -28,6 +28,8 @@ jobs:
       contents: write
       pull-requests: write
     uses: ./.github/workflows/release-npm.yml
+    secrets:
+      release-app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   publish:
     if: needs.release.outputs.mode == 'publish'
