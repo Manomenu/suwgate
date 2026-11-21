@@ -30,6 +30,18 @@ on:
         description: Variables the smoke test's compose stack needs, one NAME=value per line
         type: string
         default: ""
+      consumer:
+        description: A public repository (owner/name) that installs this repository's package; the gate job then runs that repository's gate, at its default branch or consumer-ref, against the package packed from this commit, instead of this repository's gate, and proof, stack and stamp are skipped; working-directory, browser, command and failure-artifacts then describe the consumer
+        type: string
+        default: ""
+      consumer-ref:
+        description: With consumer, the consumer's branch, tag or commit to test instead of its default branch, e.g. a branch that already adopts a breaking change of the package
+        type: string
+        default: ""
+      package:
+        description: With consumer, how the package is packed and installed there; npm packs it with pnpm pack and installs the tarball over the version the package.json of working-directory names; nuget packs it with dotnet pack at the version 0.0.0-consumer.<run id>.<attempt> into a local feed, pins the consumer's Directory.Packages.props to that version and re-locks
+        type: string
+        default: npm
       failure-artifacts:
         description: Paths kept as the artifact gate-failure when the gate fails (visual diffs, reports), one per line
         type: string
@@ -45,6 +57,7 @@ permissions: {}
 
 jobs:
   proof:
+    if: inputs.consumer == ''
     runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
@@ -99,7 +112,7 @@ jobs:
     runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 30
     concurrency:
-      group: suwgate-gate-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      group: suwgate-gate-${{ github.workflow }}-${{ inputs.consumer }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
@@ -107,10 +120,29 @@ jobs:
       tree: ${{ steps.repository.outputs.tree }}
     env:
       CI: "1"
+      CONSUMER_VERSION: 0.0.0-consumer.${{ github.run_id }}.${{ github.run_attempt }}
     steps:
-      - name: actions/checkout v7.0.1
+      - name: The consumer test's inputs fit together
+        if: inputs.consumer != ''
+        env:
+          PACKAGE: ${{ inputs.package }}
+          SMOKE: ${{ inputs.smoke }}
+        run: |
+          set -euo pipefail
+          case "$PACKAGE" in npm | nuget) ;; *) echo "package is '$PACKAGE': set it to npm or nuget" >&2; exit 1 ;; esac
+          [ "$SMOKE" != true ] || { echo "smoke and consumer together: the consumer's stack would build images without the packed package, so drop smoke from the consumer call" >&2; exit 1; }
+      - name: actions/checkout v7.0.1 (the consumer at its default branch or consumer-ref when consumer is set)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          repository: ${{ inputs.consumer || github.repository }}
+          ref: ${{ inputs.consumer-ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: actions/checkout v7.0.1 (this repository's package, inside the consumer until it is packed)
+        if: inputs.consumer != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: .suwgate-package
           fetch-depth: 0
           persist-credentials: false
       - name: What the repository needs, and the tree under test
@@ -137,6 +169,78 @@ jobs:
           global-json-file: global.json
           cache: ${{ runner.environment == 'github-hosted' && hashFiles('**/packages.lock.json') != '' }}
           cache-dependency-path: "**/packages.lock.json"
+      - name: actions/setup-dotnet v6.0.0 (the package's SDK, to pack it)
+        if: inputs.consumer != '' && inputs.package == 'nuget'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: .suwgate-package/global.json
+      - name: Pack the package into the runner's temp folder, then remove its checkout, which the consumer's guards would count as untracked files
+        id: package
+        if: inputs.consumer != ''
+        env:
+          PACKAGE: ${{ inputs.package }}
+          FEED: ${{ runner.temp }}/suwgate-package
+        run: |
+          set -euo pipefail
+          mkdir -p "$FEED"
+          cd .suwgate-package
+          if [ "$PACKAGE" = npm ]; then
+            echo "name=$(node -p 'require("./package.json").name')" >> "$GITHUB_OUTPUT"
+            pnpm install --frozen-lockfile
+            pnpm pack --pack-destination "$FEED"
+          else
+            dotnet pack -c Release -o "$FEED" --nologo -p:Version="$CONSUMER_VERSION" -p:MinVerVersionOverride="$CONSUMER_VERSION"
+          fi
+          cd ..
+          rm -rf .suwgate-package
+          ls -l "$FEED"
+      - name: Install the npm package over the version the consumer names (package.json and lockfile, in the working tree only)
+        if: inputs.consumer != '' && inputs.package == 'npm'
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          NAME: ${{ steps.package.outputs.name }}
+          FEED: ${{ runner.temp }}/suwgate-package
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tarballs=("$FEED"/*.tgz)
+          [ "${#tarballs[@]}" -eq 1 ] || { echo "pnpm pack left ${#tarballs[@]} tarballs in $FEED, expected one" >&2; exit 1; }
+          node -e '
+            const fs = require("node:fs");
+            const [name, tarball] = process.argv.slice(1);
+            const manifest = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            const field = ["dependencies", "devDependencies", "optionalDependencies"].find((group) => manifest[group]?.[name] !== undefined);
+            if (field === undefined) {
+              console.error("package.json of the consumer does not depend on " + name + ": set working-directory to the folder whose package.json names it");
+              process.exit(1);
+            }
+            console.log(field + "." + name + ": " + manifest[field][name] + " -> file:" + tarball);
+            manifest[field][name] = "file:" + tarball;
+            fs.writeFileSync("package.json", JSON.stringify(manifest, null, 4) + "\n");
+          ' "$NAME" "${tarballs[0]}"
+          pnpm install --no-frozen-lockfile
+      - name: Pin the consumer's NuGet packages to the packed version and re-lock with the local feed as an extra source, which puts the packages in the global packages folder for the gate's own restores (Directory.Packages.props and packages.lock.json, in the working tree only)
+        if: inputs.consumer != '' && inputs.package == 'nuget'
+        env:
+          FEED: ${{ runner.temp }}/suwgate-package
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=("$FEED"/*."$CONSUMER_VERSION".nupkg)
+          [ "${#packages[@]}" -gt 0 ] || { echo "dotnet pack left no package of version $CONSUMER_VERSION in $FEED: the package's projects must take Version (or MinVerVersionOverride) from the command line" >&2; exit 1; }
+          [ -f Directory.Packages.props ] || { echo "the consumer has no Directory.Packages.props: the consumer test pins NuGet packages through central package management" >&2; exit 1; }
+          pinned=0
+          for package in "${packages[@]}"; do
+            id="$(basename "$package" ".$CONSUMER_VERSION.nupkg")"
+            grep -q "<PackageVersion Include=\"$id\" " Directory.Packages.props || continue
+            sed -i -E "s|(<PackageVersion Include=\"$id\" Version=\")[^\"]*\"|\1$CONSUMER_VERSION\"|" Directory.Packages.props
+            grep -q "<PackageVersion Include=\"$id\" Version=\"$CONSUMER_VERSION\"" Directory.Packages.props \
+              || { echo "Directory.Packages.props names $id without Version right after Include: write it as <PackageVersion Include=\"$id\" Version=\"…\" />" >&2; exit 1; }
+            echo "$id -> $CONSUMER_VERSION"
+            pinned=$((pinned + 1))
+          done
+          [ "$pinned" -gt 0 ] || { echo "Directory.Packages.props of the consumer pins none of the packed packages (${packages[*]##*/}): is this the right consumer?" >&2; exit 1; }
+          CI="" dotnet restore --force-evaluate --nologo -p:RestoreAdditionalProjectSources="$FEED"
       - name: Install the packages
         working-directory: ${{ inputs.working-directory }}
         run: pnpm install --frozen-lockfile
@@ -196,7 +300,7 @@ jobs:
 
   stack:
     needs: proof
-    if: inputs.smoke && needs.proof.outputs.hosted == 'true' && needs.proof.outputs.proven != 'true'
+    if: inputs.smoke && inputs.consumer == '' && needs.proof.outputs.hosted == 'true' && needs.proof.outputs.proven != 'true'
     runs-on: ${{ inputs.runs-on || vars.CI_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     concurrency:
