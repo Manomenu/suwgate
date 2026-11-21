@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'USAGE'
-usage: runner-switch.sh [status] [--repositories <name,name,...>] [--owner <login>] [--included <minutes>] [--margin <minutes>] [--label <label>]
+usage: runner-switch.sh [status | job-started | job-completed] [--repositories <name,name,...>] [--owner <login>] [--included <minutes>] [--margin <minutes>] [--label <label>]
 
 Moves the CI of an account's private repositories onto self-hosted runners while the account's included
 GitHub Actions minutes are used up, and back onto GitHub-hosted runners when they are not (a new month).
@@ -18,6 +18,9 @@ runs-on: ${{ vars.CI_RUNNER || 'ubuntu-24.04' }}.
 Idempotent: it changes only what differs and prints one line per change, nothing otherwise.
 A listed repository that is not private is refused: a self-hosted runner must never serve a public one.
 
+  job-started      the runner's job-started hook: hold ci-job-awake@<repository of GITHUB_REPOSITORY>, a lock that keeps
+                   the machine from sleeping until job-completed or 6 hours; never fails the job
+  job-completed    the runner's job-completed hook: release that lock
   status           change nothing, print one screen: the private Actions minutes of this month against the included
                    ones, CI_RUNNER of each listed repository and where its CI runs, each runner's user service
                    actions-runner@<repository> and whether its runner is busy with a job, and the switch timer's
@@ -40,6 +43,15 @@ readonly SETTINGS="${XDG_CONFIG_HOME:-$HOME/.config}/suw-ci-runner-switch.env"
 readonly SWITCH_UNIT=suw-ci-runner-switch
 
 command=switch
+keep_awake() {
+    local unit="ci-job-awake@${GITHUB_REPOSITORY#*/}.service"
+    if [ "$1" = job-started ]; then
+        systemctl --user start "$unit" || echo "could not keep the machine awake for this job: see journalctl --user -u $unit" >&2
+    else
+        systemctl --user stop "$unit" || true
+    fi
+}
+
 owner=""
 repositories=""
 included=2000
@@ -55,6 +67,10 @@ while [ $# -gt 0 ]; do
         status)
             command=status
             shift
+            ;;
+        job-started | job-completed)
+            keep_awake "$1"
+            exit 0
             ;;
         --repositories | --owner | --included | --margin | --label)
             [ $# -ge 2 ] && [ -n "$2" ] || {
@@ -111,12 +127,21 @@ service_state() {
     systemctl --user show "$1" -p ActiveState -p SubState --value 2>/dev/null | paste -sd/ - || echo unknown
 }
 
+awake_line() {
+    local name held=()
+    for name in "${names[@]}"; do
+        [ "$(systemctl --user is-active "ci-job-awake@$name.service" 2>/dev/null)" = active ] && held+=("$name")
+    done
+    echo "kept awake for a job: ${held[*]:-none}"
+}
+
 timer_line() {
     local last next result status
     last="$(systemctl --user show "$SWITCH_UNIT.service" -p ExecMainExitTimestamp --value 2>/dev/null)"
     next="$(systemctl --user show "$SWITCH_UNIT.timer" -p NextElapseUSecRealtime --value 2>/dev/null)"
     result="$(systemctl --user show "$SWITCH_UNIT.service" -p Result --value 2>/dev/null)"
     status="$(systemctl --user show "$SWITCH_UNIT.service" -p ExecMainStatus --value 2>/dev/null)"
+    [[ -n "$status" && "$status" != 0 ]] && result=failed
     echo "switch timer $SWITCH_UNIT.timer ($(service_state "$SWITCH_UNIT.timer")): last run ${last:-never} (${result:-unknown}, exit ${status:-?}), next run ${next:-none}"
 }
 
@@ -139,6 +164,7 @@ show_status() {
             "actions-runner@$name $(service_state "actions-runner@$name.service")" "$(runner_on_github "$name")"
     done
     echo
+    awake_line
     timer_line
 }
 

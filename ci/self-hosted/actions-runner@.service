@@ -16,6 +16,7 @@ KillSignal=SIGTERM
 TimeoutStopSec=5min
 Restart=always
 RestartSec=30
+ExecStopPost=-/usr/bin/systemctl --user stop ci-job-awake@%i.service
 
 [Install]
 WantedBy=default.target
