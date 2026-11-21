@@ -3,7 +3,7 @@
 Steps for the owner, once, in this order: A publishes the CLI to npmjs.com, B publishes the .NET packages to nuget.org. After this,
 CI publishes every release and no step below is repeated, except the version bump and the tag of B.
 
-Nothing here is done by an agent: agents never log in to a registry or push a release.
+Nothing here is done by an agent: it needs the owner's npm and NuGet accounts.
 
 ## A) npm: `@maniumek/suwgate`
 

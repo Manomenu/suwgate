@@ -35,7 +35,7 @@ as a local source in that repository's `nuget.config`. Neither a `link:` nor a l
 
 ## Releases
 
-The CLI: a changeset per change (the `changeset` step sees a new one only once git tracks it: `git add` it); on `master`, CI opens the "Version Packages" pull request, and after the owner merges it, publishes
+The CLI: a changeset per change (the `changeset` step sees a new one only once git tracks it: `git add` it); on `master`, CI opens the "Version Packages" pull request, and once it is merged, publishes
 `@maniumek/suwgate` with npm trusted publishing (provenance included). The .NET packages are not published yet (TODO.md).
 
 ## Merging a branch
