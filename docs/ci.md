@@ -3,11 +3,11 @@
 A repository calls these workflows instead of copying a `ci.yml`, so a pinned action, a tool version or a checksum changes in one place.
 They are `workflow_call` workflows in `.github/workflows/` of this repository.
 
-| Workflow            | Does                                                                                                                                                                                                                                                                                                                     | Inputs                                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `gate.yml`          | `proof` (has this push's tree already passed?), then the gate: checkout, pnpm, Node, .NET when there is a `global.json`, the browser, gitleaks and shellcheck (and oasdiff when an `openapi.json` is tracked) with checksums, `suwgate check`; the stack smoke test when asked; `stamp`; on failure keeps `gate-failure` | `runs-on`, `command`, `node-version`, `working-directory`, `browser`, `smoke`, `smoke-env`, `failure-artifacts` |
-| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                                                                                                                                      | `runs-on`, `node-version`, `build-command`; secret `release-app-private-key`                                    |
-| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                                                                                                                              | `runs-on`, `pack-target`                                                                                        |
+| Workflow            | Does                                                                                                                                                                                                                                                                                                                     | Inputs                                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `gate.yml`          | `proof` (has this push's tree already passed?), then the gate: checkout, pnpm, Node, .NET when there is a `global.json`, the browser, gitleaks and shellcheck (and oasdiff when an `openapi.json` is tracked) with checksums, `suwgate check`; the stack smoke test when asked; `stamp`; on failure keeps `gate-failure` | `runs-on`, `command`, `node-version`, `working-directory`, `browser`, `smoke`, `smoke-env`, `consumer`, `consumer-ref`, `package`, `failure-artifacts` |
+| `release-npm.yml`   | changesets: select the mode, open the "Version Packages" pull request, or build and pack; outputs `mode` and `pack-dir-artifact-id`                                                                                                                                                                                      | `runs-on`, `node-version`, `build-command`; secret `release-app-private-key`                                                                           |
+| `release-nuget.yml` | checkout with the full history and tags, `dotnet pack` in Release with the SDK of `global.json`, keeps the packages as the artifact `nupkg`                                                                                                                                                                              | `runs-on`, `pack-target`                                                                                                                               |
 
 Inputs exist only for what differs between repositories and cannot be read from the repository. Everything else (timeouts, action
 pins, tool versions) is fixed here. `gate.yml` derives the rest: the runner is `runs-on`, else the caller's repository variable
@@ -17,6 +17,48 @@ pins, tool versions) is fixed here. `gate.yml` derives the rest: the runner is `
 where a repository has its own script).
 
 `gate.yml` outputs `proven`: `true` when the push's tree had already passed and the gate was skipped.
+
+## The consumer test: a package proven in a real app before it is released
+
+A kit's own gate proves the package in its own small app (the `consumer-app` step: `vite build`, `vite preview`). That missed
+suwfrontkit 0.11.0, whose two files differing only in letter case broke esbuild's dependency pre-bundling, which only the Vite dev
+server runs: every app's dev server failed, and the template's gate, whose browser tests run on the dev server, caught it only after
+the release. So a kit's CI also runs the gate of a real consumer against the package packed from the kit's commit: a second call of
+`gate.yml` with `consumer`.
+
+With `consumer: <owner>/<name>` (a public repository) the `gate` job:
+
+1. checks out the consumer at its default branch, with the full history, and the caller's commit into `.suwgate-package` inside it;
+2. packs the package into the runner's temp folder and removes `.suwgate-package`, which the consumer's guards would count as
+   untracked files:
+    - `package: npm` (the default): `pnpm install --frozen-lockfile` and `pnpm pack` (`prepack` builds);
+    - `package: nuget`: `dotnet pack -c Release` with the SDK of the package's `global.json`, at the version
+      `0.0.0-consumer.<run id>.<attempt>`, passed as `Version` and as `MinVerVersionOverride` (MinVer ignores `-p:Version`). A version
+      that exists nowhere else is the only one NuGet cannot take from nuget.org or from the global packages folder instead;
+3. installs it over the published version, in the consumer's working tree only:
+    - npm: the spec in the `package.json` of `working-directory` (dependencies, devDependencies or optionalDependencies) becomes
+      `file:<tarball>`, then `pnpm install --no-frozen-lockfile` rewrites the lockfile;
+    - nuget: every packed package that the consumer's `Directory.Packages.props` pins gets the packed version, and
+      `dotnet restore --force-evaluate -p:RestoreAdditionalProjectSources=<folder of the packages>` without `CI` (locked mode is on
+      in CI) rewrites the `packages.lock.json` files and puts the packages into the global packages folder, where the gate's own
+      restores find them without a source. `nuget.config` stays as it is: an added source is a line the consumer's csharpier
+      refuses. It fails when the consumer pins none of the packed packages;
+4. runs the consumer's gate with every step a normal run has (`suwgate check --verbose`, the browser tests included).
+
+`working-directory`, `browser`, `command` and `failure-artifacts` then describe the consumer, as in the consumer's own `ci.yml`.
+`proof`, `stack` and `stamp` are skipped: they speak about the caller's tree, which this job does not test, so the consumer test
+never stamps it. `smoke` is refused: the stack's images would install the published package, not the packed one. The job's
+concurrency group names the consumer, so the kit's two calls on one pull request do not cancel each other. The caller job grants
+the same permissions as for the gate (GitHub checks them for the skipped jobs too).
+
+The consumer is tested at its default branch, not pinned: the test asks whether this package breaks the app as it is today. A red
+consumer master makes every kit run red until it is fixed, which is the point: it is the app the release would break.
+
+A breaking change of the package (a minor while the version is 0.x) fails against the consumer's master by design, and the consumer
+cannot adopt a version that is not released yet. So the consumer adopts it first on a branch (its code written for the new API, its
+version pin still the old one), and the kit's pull request sets `consumer-ref: <that branch>` on its consumer job. The consumer test
+then proves the new package against the adapted app, the release goes out, the consumer's branch bumps the version and merges, and
+the kit's next pull request drops `consumer-ref`. Never drop the consumer job from the release's `needs` instead.
 
 ## Full history for the gate
 
@@ -169,6 +211,31 @@ publish:
           with:
               pack-dir-artifact-id: ${{ needs.release.outputs.pack-dir-artifact-id }}
 ```
+
+The consumer test of a kit: a second call of the gate, beside its own, that the release job waits for. suwfrontkit, with the
+template as the consumer:
+
+```yaml
+consumer:
+    permissions:
+        contents: read
+        statuses: write
+        pull-requests: read
+    uses: Manomenu/suwgate/.github/workflows/gate.yml@<sha>
+    with:
+        consumer: Manomenu/solid-dotnet-app-tpl
+        working-directory: Myapp.Web
+        browser: chromium
+
+release:
+    if: github.event_name == 'push'
+    needs: [gate, consumer]
+```
+
+suwbackkit takes the same job with `package: nuget` and the same three inputs (`consumer: Manomenu/solid-dotnet-app-tpl`,
+`working-directory: Myapp.Web`, `browser: chromium`: the template's gate needs its web folder and the browser for its e2e tests),
+and its `pack` job waits for it: `needs: [gate, consumer]`. The consumer job runs on pull requests and on pushes alike, so a tag run
+tests the tagged commit in the consumer before it packs.
 
 A NuGet package (suwbackkit, versioned by MinVer from its `v*` tags), triggered by a version tag, the gate first, with the
 trusted-publishing policy naming the caller's file and the environment:
