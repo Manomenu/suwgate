@@ -1,0 +1,22 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "extends": ["group:all", ":disableDependencyDashboard"],
+    "timezone": "Europe/Warsaw",
+    "schedule": ["* 0-5 * * 1"],
+    "automerge": true,
+    "automergeType": "pr",
+    "automergeStrategy": "merge-commit",
+    "platformAutomerge": false,
+    "vulnerabilityAlerts": { "enabled": true },
+    "packageRules": [
+        {
+            "matchPackageNames": ["@maniumek/suwgate"],
+            "postUpgradeTasks": {
+                "commands": ["npx --yes @maniumek/suwgate@{{{newVersion}}} agents-shared"],
+                "fileFilters": ["AGENTS.shared.md"],
+                "executionMode": "update",
+                "installTools": { "node": {}, "npm": {} }
+            }
+        }
+    ]
+}

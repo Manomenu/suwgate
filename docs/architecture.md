@@ -11,6 +11,7 @@ One line per top-level folder (at most 300 characters each).
 - `.changeset/` — changesets of the CLI: one Markdown file per change waiting for the next release, and the config (base branch `master`, only `src/` and `schema/` need one).
 - `ci/` — CI infrastructure for the repositories that call suwgate's workflows: `self-hosted/`, the switch that moves private repositories onto local runners while the account's Actions minutes are used up, its systemd units and setup.
 - `.github/` — `workflows/ci.yml`: the gate on every push and pull request (suwgate checks itself from the sources), then on `master` the release of the CLI with changesets and npm trusted publishing.
+- `renovate/` — `default.json`, the Renovate preset every repository of the stack gets from `.github/renovate-global.json`, which `workflows/renovate.yml` runs ([ci.md](ci.md)); a folder of its own because presets are referenced by path.
 - `.claude/` — the committed Claude Code settings: the Stop hook runs the quick gate, the PreToolUse hook refuses an agent's edit of the gate and of generated files; both are `suwgate hook` commands run from the sources.
 - `.githooks/` — `pre-commit`: `suwgate hook pre-commit` from the sources (gitleaks on what is staged, then the quick gate); `just sync` enables it.
 - `.config/` — `dotnet-tools.json`: CSharpier at a pinned version, for the `dotnet-format` step.
