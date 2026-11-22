@@ -9,9 +9,9 @@ One line per top-level folder (at most 300 characters each).
 - `dotnet/` — the .NET guards: `Suwgate.Architecture` (with the contract in `Verification/`), `Suwgate.Database`, and `Suwgate.Tests` (xUnit v3, one folder per package).
 - `docs/` — for people working on suwgate: this map and the contracts, `development.md`, `inventory.md` (what is still to be moved here and by whom), decisions in `adr/`, specs in `visual/spec/` and drafts in `draft/spec/`.
 - `.changeset/` — changesets of the CLI: one Markdown file per change waiting for the next release, and the config (base branch `master`, only `src/` and `schema/` need one).
-- `ci/` — CI infrastructure for the repositories that call suwgate's workflows: `self-hosted/`, the switch that moves private repositories onto local runners while the account's Actions minutes are used up, its systemd units and setup.
+- `ci/` — CI infrastructure for the repositories that call suwgate's workflows: `renovate-holds.sh`, the check of the preset's version holds; `self-hosted/`, the switch that moves private repositories onto local runners while the account's Actions minutes are used up, its systemd units and setup.
 - `.github/` — `workflows/ci.yml`: the gate on every push and pull request (suwgate checks itself from the sources), then on `master` the release of the CLI with changesets and npm trusted publishing.
-- `renovate/` — `default.json`, the Renovate preset every repository of the stack gets from `.github/renovate-global.json`, which `workflows/renovate.yml` runs ([ci.md](ci.md)); a folder of its own because presets are referenced by path.
+- `renovate/` — `default.json`, the Renovate preset every repository of the stack gets from `.github/renovate-global.json`, which `workflows/renovate.yml` runs ([ci.md](ci.md)); a folder of its own because presets are referenced by path; `holds.json`, what each version hold of the preset follows.
 - `.claude/` — the committed Claude Code settings: the Stop hook runs the quick gate, the PreToolUse hook refuses an agent's edit of the gate and of generated files; both are `suwgate hook` commands run from the sources.
 - `.githooks/` — `pre-commit`: `suwgate hook pre-commit` from the sources (gitleaks on what is staged, then the quick gate); `just sync` enables it.
 - `.config/` — `dotnet-tools.json`: CSharpier at a pinned version, for the `dotnet-format` step.
