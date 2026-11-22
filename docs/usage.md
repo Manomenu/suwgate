@@ -169,6 +169,9 @@ A check counts only when the tool shows it ran, not because a file or a line of 
 - The kits are wired, not only installed: `suwbackkit-wiring` asks a web server that references `Suwbackkit.Server` to call
   `AddServerDefaults` and `MapServerDefaults`; `suwfrontkit-wiring` asks an app that depends on `@maniumek/suwfrontkit` to load
   its `theme.css` from the main module of its `index.html`, or from a stylesheet that module imports.
+- `openapi-versions` keeps `Microsoft.Extensions.ApiDescription.Server`, which writes the OpenAPI contract at build, at the same
+  version as `Microsoft.AspNetCore.OpenApi` in `Directory.Packages.props`: the tool loads the server's OpenAPI library and fails on
+  a `Microsoft.OpenApi` mismatch, and pinning the library beside the tool makes an update move both.
 - The reports live in a temporary folder of the run (`SUWGATE_RUN`), deleted when `suwgate check` ends. Every .NET test project
   tests with xUnit v3, since `dotnet-test` reads xUnit's XML reports.
 
