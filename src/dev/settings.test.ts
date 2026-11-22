@@ -71,8 +71,22 @@ describe("dev settings", () => {
         [{ name: "x", smoke: { checks: [{ path: "healthz", expect: "ok", hint: "h" }] } }, "path must start with /"],
         [{ name: "x", smoke: { checks: [{ path: "/h", expect: "(", hint: "h" }] } }, "is not a regular expression"],
         [{ name: "x", smoke: { checks: [] } }, "non-empty list"],
+        [{ name: "x", siblings: { cms: { checkout: "../cms" } } }, "dev.siblings.cms.images is missing"],
+        [{ name: "x", siblings: { cms: null } }, "dev.siblings.cms.images is missing"],
+        [{ name: "x", siblings: { cms: { images: [] } } }, "dev.siblings.cms.images must name at least one image"],
+        [{ name: "x", siblings: { Cms: { images: ["cms:local"] } } }, 'the name "Cms" must be lower-case letters'],
+        [{ name: "x", siblings: { cms: { images: ["cms:local"], health: "localhost:8225" } } }, "must be an http:// or https:// address"],
+        [{ name: "x", siblings: { cms: { images: ["cms:local"], port: 1 } } }, "dev.siblings.cms.port is not a setting"],
+        [{ name: "x", siblings: ["cms"] }, "dev.siblings must be a mapping"],
     ])("refuses %j and says what to fix", (raw, message) => {
         expect(problemsOf(raw)).toContain(message);
+    });
+
+    it("reads a sibling with its defaults: the checkout next to the repository, built with docker compose build", () => {
+        expect(settingsOf({ name: "chat", siblings: { cms: { images: ["cms:local"] } } }).siblings).toEqual([
+            { name: "cms", checkout: "/cms", build: "docker compose build", images: ["cms:local"], compose: null, health: null },
+        ]);
+        expect(settingsOf().siblings).toEqual([]);
     });
 
     it("says how to fix a missing web folder", () => {

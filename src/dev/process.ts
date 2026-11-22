@@ -37,12 +37,9 @@ export function quoted(argument: string): string {
 export const exec: Exec = (argv, options = {}) =>
     new Promise((resolve) => {
         const [program = "", ...args] = argv;
+        const quiet = options.quiet === true ? "ignore" : "inherit";
         const stdio =
-            options.capture === true
-                ? ["inherit", "pipe", "inherit"]
-                : options.quiet === true
-                  ? ["inherit", "ignore", "ignore"]
-                  : "inherit";
+            options.capture === true ? ["inherit", "pipe", quiet] : options.quiet === true ? ["inherit", "ignore", "ignore"] : "inherit";
         const child = spawn(program, args, {
             cwd: options.cwd ?? process.cwd(),
             env: { ...process.env, ...options.env },

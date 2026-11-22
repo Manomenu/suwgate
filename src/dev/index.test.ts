@@ -12,6 +12,7 @@ function environment(load: DevEnvironment["loadSettings"] = () => settingsOf()):
         io,
         exec: fakeExec().exec,
         fetch: () => Promise.resolve({ status: 200, body: "" }),
+        pause: () => Promise.resolve(),
         self: "suwgate",
         interactive: false,
         ask: () => Promise.resolve(""),
@@ -36,7 +37,7 @@ describe("suwgate dev", () => {
         expect(err[0]).toContain('no command "nope"');
     });
 
-    it.each(["db", "logs", "smoke", "server", "tmux", "checkout-env"])(
+    it.each(["db", "logs", "smoke", "server", "tmux", "sibling", "checkout-env"])(
         "prints the help of %s without reading suwgate.yml",
         async (command) => {
             const { env, out } = environment(() => {

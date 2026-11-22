@@ -12,6 +12,7 @@ suwgate dev logs [--all] [--trace <id>] [--compose] [-n N] [--file <path>]
 suwgate dev smoke [<base-url> | --ci]
 suwgate dev server [dotnet run arguments]
 suwgate dev tmux start [--restart] | stop
+suwgate dev sibling [<name> image | up | rebuild | down | status]
 eval "$(suwgate dev checkout-env)"
 ```
 
@@ -89,6 +90,48 @@ and suwageval -70.
   ports); a linked git worktree gets its own e2e and test databases and its own e2e port pair, from a hash of the repository's
   git directory and the worktree's directory name, so worktrees with the same name in two repositories never share a port or a
   database, and one worktree gets the same ones on every run. A value already in the environment wins. The builds also stop leaving MSBuild workers behind.
+
+## Siblings: the images of a repository checked out next to this one
+
+Some repositories run the Docker images of a sibling repository checked out next to them: suwchatbot runs suwagcms and
+Suwageval, Suwageval runs the example agent suwexag. An image built from another commit, or from a checkout with uncommitted
+changes, runs code that is not what the sibling holds, and the bug it shows is one nobody can find in either repository.
+`suwgate dev sibling` rebuilds the images from the sibling's checkout whenever they are not what it holds now, the same way in
+every repository.
+
+```yaml
+dev:
+    name: suwchatbot
+    siblings:
+        suwagcms:
+            images: [suwagcms-server:local, suwagcms-web:local]
+            compose: suwagcms/compose.yaml
+            health: http://localhost:8225/api/health
+```
+
+| Key                        | Default                | Used by                                                                               |
+| :------------------------- | :--------------------- | :------------------------------------------------------------------------------------ |
+| `siblings.<name>`          | none                   | the sibling, by a kebab-case lower-case name                                          |
+| `siblings.<name>.checkout` | `../<name>`            | the sibling's git checkout, relative to the repository root                           |
+| `siblings.<name>.build`    | `docker compose build` | `image`, `up`, `rebuild`: a bash command, run in the checkout, that builds the images |
+| `siblings.<name>.images`   | required               | the images the build makes and this repository runs, at least one                     |
+| `siblings.<name>.compose`  | none                   | `up`, `down`, `status`: a compose file of this repository that runs the images        |
+| `siblings.<name>.health`   | none                   | `up`, `status`: an address whose GET answers 2xx once the sibling is up               |
+
+- `image` makes the images current without starting anything. It rebuilds when an image is missing, when the recorded build is
+  of another commit than the checkout's HEAD (or there is no record), when an image's id differs from the recorded one (someone
+  rebuilt or pulled it since), or when the checkout has uncommitted changes, untracked files included. It prints one line: why it
+  rebuilds, or that the images are current.
+- `up` is `image`, then `docker compose -f <compose> up -d` (compose recreates a container whose image changed), then it waits up
+  to 2 minutes until `health` answers and prints `<name>: <the address>`. Without `compose` it refuses: `image` is the command then.
+- `rebuild` builds whatever the state, records it, and recreates the stack when it runs. `down` is `docker compose down`, never
+  with `-v`: the data stays. `status` says whether `health` answers, runs `docker compose ps` and says whether the images are
+  current, building nothing. Without a name, `suwgate dev sibling` lists every sibling with its checkout and that answer.
+
+After a build that passed, the command records the checkout's HEAD and the id of every image (`docker image inspect -f {{.Id}}`)
+in `.artifacts/dev/siblings/<name>.json`; a failed build records nothing, so the next run builds again. Without a git checkout at
+the path, images that exist run as they are, with one line that says so and how to set `checkout`; a missing image is then a
+failure, since there is nothing to build it from.
 
 ## Moving a repository to it
 

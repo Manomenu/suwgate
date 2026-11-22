@@ -147,7 +147,7 @@
             }
         },
         "dev": {
-            "description": "What suwgate dev needs to run the local stack of the repository: db, logs, smoke, server, tmux, checkout-env.",
+            "description": "What suwgate dev needs to run the local stack of the repository: db, logs, smoke, server, tmux, sibling, checkout-env.",
             "type": "object",
             "additionalProperties": false,
             "required": ["name"],
@@ -253,6 +253,44 @@
                                     },
                                     "hint": { "type": "string", "minLength": 1, "description": "What to look at when it fails." }
                                 }
+                            }
+                        }
+                    }
+                },
+                "siblings": {
+                    "description": "Sibling repositories checked out next to this one whose Docker images this repository runs, by their kebab-case name; suwgate dev sibling <name> rebuilds the images from the checkout whenever they are not what it holds now.",
+                    "type": "object",
+                    "propertyNames": { "$ref": "#/$defs/id" },
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["images"],
+                        "properties": {
+                            "checkout": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "The sibling's git checkout, relative to the repository root (default ../<name>)."
+                            },
+                            "build": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "A bash command, run in the checkout, that builds the images (default docker compose build)."
+                            },
+                            "images": {
+                                "description": "The images the build makes and this repository runs, e.g. [suwagcms-server:local, suwagcms-web:local].",
+                                "type": "array",
+                                "minItems": 1,
+                                "uniqueItems": true,
+                                "items": { "type": "string", "minLength": 1 }
+                            },
+                            "compose": {
+                                "$ref": "#/$defs/relativePath",
+                                "description": "A compose file of this repository that runs the images; up, down and status need it."
+                            },
+                            "health": {
+                                "type": "string",
+                                "pattern": "^https?://[^/]",
+                                "description": "An address whose GET answers 2xx once the sibling is up; up waits for it up to 2 minutes."
                             }
                         }
                     }
