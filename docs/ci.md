@@ -162,6 +162,9 @@ task may run; `renovate/default.json` is the shared preset every repository gets
 - The .NET platform stays on its major (`Microsoft.AspNetCore.*`, `Microsoft.Extensions.*`, Entity Framework, `System.*`, the SDK
   in `global.json` and the .NET images): a new major of .NET is a migration of every project's target framework, decided by a
   person, not a bump; its packages of the next major do not even restore on the current one, which would fail the whole pull request.
+- The SDK in `global.json` is not updated: it is the lowest SDK the repository builds with (`rollForward` takes any newer one), and
+  raising it above the SDK of the build image (`mcr.microsoft.com/dotnet/sdk:…` in the Dockerfiles, updated on its own) failed the
+  stack's `dotnet restore` with exit code 155.
 - PostgreSQL images stay on their major: a new major cannot read the data directory of the old one (a dump and restore, or
   pg_upgrade, of every local volume) and moves where the data lives from 18 on, so it is a migration a person starts.
 - A stack that comes from another project, such as Langfuse's compose file in suwchatbot, keeps the versions that project ships
