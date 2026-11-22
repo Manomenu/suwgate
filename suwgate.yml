@@ -40,7 +40,10 @@ exceptions:
     reason: the setup guide of the self-hosted runners names files of the runner (run.sh, bin/runsvc.sh, .path) and of the calling repositories (compose.yaml, compose.ci.yaml), which are not paths of suwgate
   - guard: docs-paths
     target: README.md
-    reason: the README is the user guide of the package, so it names files of the consuming repositories (contract/openapi.json, knip.config.ts, criteria.json) and preset entry points such as tsconfig/strict
+    reason: the README shows the settings of the steps of a consuming repository, so it names its files (contract/openapi.json)
+  - guard: docs-paths
+    target: docs/usage.md
+    reason: the usage guide is the reference for a repository that installs suwgate, so it names files of the consuming repositories (e2e/playwright.config.ts, knip.config.ts, criteria.json, layers.json)
   - guard: config-contents
     target: tsconfig.json
     reason: suwgate is where the tsconfig presets come from and does not install itself, so its own tsconfig cannot extend @maniumek/suwgate/tsconfig
