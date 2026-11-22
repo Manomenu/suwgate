@@ -14,9 +14,8 @@ public sealed class DatabaseProfile : IGuardProfile
         ArgumentNullException.ThrowIfNull(context);
         return
         [
-            new(
-                MigrationScriptNames.GuardId,
-                () => new MigrationScriptNames(Path.Combine(context.Repository.Root, MigrationsDirectory(context)))
+            new(MigrationScriptNames.GuardId, () =>
+                new MigrationScriptNames(Path.Combine(context.Repository.Root, MigrationsDirectory(context)))
             ),
         ];
     }

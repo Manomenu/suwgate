@@ -97,12 +97,10 @@ internal sealed partial class MsBuildCondition
             throw Unreadable(text);
         }
         return Reference()
-            .Replace(
-                text,
-                match =>
-                    PropertyName().IsMatch(match.Groups[1].Value)
-                        ? property(match.Groups[1].Value) ?? throw Unreadable(match.Value)
-                        : throw Unreadable(match.Value)
+            .Replace(text, match =>
+                PropertyName().IsMatch(match.Groups[1].Value)
+                    ? property(match.Groups[1].Value) ?? throw Unreadable(match.Value)
+                    : throw Unreadable(match.Value)
             );
     }
 
