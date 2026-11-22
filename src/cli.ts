@@ -28,8 +28,9 @@ const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [
                            (CLAUDE_PROJECT_DIR, else the git checkout it runs in), with the lists of its profiles
   suwgate hook stop        Claude Code Stop hook: runs the quick gate unless nothing changed since it last passed
   suwgate hook pre-commit  git pre-commit hook: gitleaks on the staged changes, then the quick gate
-  suwgate dev <db|logs|smoke|server|tmux|checkout-env>
-                           the local stack of the repository (the dev section of suwgate.yml); suwgate dev --help
+  suwgate dev <db|logs|smoke|server|tmux|sibling|checkout-env>
+                           the local stack of the repository (the dev section of suwgate.yml), and the images of the
+                           sibling repositories it runs, rebuilt from their checkouts when stale; suwgate dev --help
   suwgate agents-shared    writes AGENTS.shared.md, the rules every repository shares, as this suwgate ships it, into the
                            repository root (the agents-shared guard fails until the copy is current)
   suwgate verdict <tests|guards|tsconfig|eslint> ...

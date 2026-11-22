@@ -11,6 +11,15 @@ export interface SmokeCheck {
     hint: string;
 }
 
+export interface SiblingSettings {
+    name: string;
+    checkout: string;
+    build: string;
+    images: string[];
+    compose: string | null;
+    health: string | null;
+}
+
 export interface DevSettings {
     root: string;
     name: string;
@@ -22,6 +31,7 @@ export interface DevSettings {
     webDirectory: string | null;
     logFile: string;
     smokeChecks: SmokeCheck[];
+    siblings: SiblingSettings[];
 }
 
 export const BASE_PORTS = { server: 6300, web: 3300, e2eServer: 6301, e2eWeb: 3301, database: 5533, stack: 8190 } as const;
@@ -37,24 +47,30 @@ export const DEFAULT_SMOKE_CHECKS: readonly SmokeCheck[] = [
 
 const NAME = /^[a-z][a-z0-9-]*$/;
 const MAX_ALIASES = 10_000;
-const ROOT_KEYS = ["name", "portOffset", "ports", "compose", "database", "server", "smoke"];
+const ROOT_KEYS = ["name", "portOffset", "ports", "compose", "database", "server", "smoke", "siblings"];
 const PORT_KEYS = Object.keys(BASE_PORTS);
 const COMPOSE_KEYS = ["file", "profile", "databaseService", "serverService", "extraServices"];
 const DATABASE_KEYS = ["user", "password", "name", "up", "psql"];
 const SERVER_KEYS = ["project", "logFile"];
 const SMOKE_KEYS = ["checks"];
 const CHECK_KEYS = ["path", "expect", "hint"];
+const SIBLING_KEYS = ["checkout", "build", "images", "compose", "health"];
+const HEALTH_URL = /^https?:\/\/[^/]/;
 const PORT_RANGE = { min: 1, max: 65535 };
 
 type Problems = string[];
 
-function section(value: unknown, where: string, keys: readonly string[], problems: Problems): Record<string, unknown> {
+function mapping(value: unknown, where: string, problems: Problems): Record<string, unknown> {
     if (value === undefined) return {};
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         problems.push(`${where} must be a mapping`);
         return {};
     }
-    const record = value as Record<string, unknown>;
+    return value as Record<string, unknown>;
+}
+
+function section(value: unknown, where: string, keys: readonly string[], problems: Problems): Record<string, unknown> {
+    const record = mapping(value, where, problems);
     for (const key of Object.keys(record)) {
         if (!keys.includes(key)) problems.push(`${where}.${key} is not a setting of suwgate dev: the settings are ${keys.join(", ")}`);
     }
@@ -106,6 +122,38 @@ function smokeChecks(raw: unknown, problems: Problems): SmokeCheck[] {
         if (!checkPath.startsWith("/")) problems.push(`${where}.path must start with /`);
         return { path: checkPath, expect, hint: text(record, "hint", where, "", problems) };
     });
+}
+
+function optionalText(record: Record<string, unknown>, key: string, where: string, problems: Problems): string | null {
+    return record[key] === undefined ? null : text(record, key, where, "", problems);
+}
+
+function sibling(name: string, raw: unknown, root: string, problems: Problems): SiblingSettings {
+    const where = `dev.siblings.${name}`;
+    if (!NAME.test(name))
+        problems.push(`dev.siblings: the name "${name}" must be lower-case letters, digits and dashes, starting with a letter`);
+    const record = section(raw ?? {}, where, SIBLING_KEYS, problems);
+    const images = list(record, "images", where, problems);
+    if (record["images"] === undefined) {
+        problems.push(`${where}.images is missing: the images the sibling's build makes, e.g. [${name}-server:local]`);
+    } else if (Array.isArray(record["images"]) && images.length === 0) {
+        problems.push(`${where}.images must name at least one image the sibling's build makes`);
+    }
+    const health = optionalText(record, "health", where, problems);
+    if (health !== null && !HEALTH_URL.test(health)) problems.push(`${where}.health must be an http:// or https:// address: ${health}`);
+    return {
+        name,
+        checkout: path.resolve(root, text(record, "checkout", where, `../${name}`, problems)),
+        build: text(record, "build", where, "docker compose build", problems),
+        images,
+        compose: optionalText(record, "compose", where, problems),
+        health,
+    };
+}
+
+function siblings(raw: unknown, root: string, problems: Problems): SiblingSettings[] {
+    const record = mapping(raw, "dev.siblings", problems);
+    return Object.entries(record).map(([name, value]) => sibling(name, value, root, problems));
 }
 
 export function resolveSettings(raw: unknown, directories: Readonly<Record<string, unknown>>, root: string): DevSettings {
@@ -160,6 +208,7 @@ export function resolveSettings(raw: unknown, directories: Readonly<Record<strin
         webDirectory: stringOrNull(directories["web"]),
         logFile: text(serverRaw, "logFile", "dev.server", ".artifacts/logs/server.jsonl", problems),
         smokeChecks: smokeChecks(top["smoke"], problems),
+        siblings: siblings(top["siblings"], root, problems),
     };
     if (problems.length > 0) {
         throw new Failure(`suwgate.yml: ${problems.join("\n  suwgate.yml: ")}`, 2);
