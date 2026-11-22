@@ -9,6 +9,10 @@ on:
         description: "Open and update pull requests now, outside the Monday schedule"
         type: boolean
         default: false
+      debug:
+        description: "Log at debug level"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -30,6 +34,11 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
+      - name: List the repositories the App reaches
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh api /installation/repositories --paginate -q '.repositories[].full_name'
+
       - name: actions/checkout v7.0.1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -42,5 +51,5 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           renovate-version: 44.257.9
         env:
-          LOG_LEVEL: info
+          LOG_LEVEL: ${{ inputs.debug && 'debug' || 'info' }}
           RENOVATE_FORCE: ${{ inputs.now && '{"schedule":[]}' || '{}' }}
