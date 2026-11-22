@@ -36,6 +36,16 @@
             "enabled": false
         },
         {
+            "matchDatasources": ["docker"],
+            "matchPackageNames": ["postgres", "docker.io/library/postgres", "**/postgres"],
+            "matchUpdateTypes": ["major"],
+            "enabled": false
+        },
+        {
+            "matchFileNames": ["**/langfuse/**"],
+            "enabled": false
+        },
+        {
             "matchPackageNames": ["typescript"],
             "allowedVersions": ">=4.8.4 <6.1.0"
         },
