@@ -36,6 +36,10 @@
             "enabled": false
         },
         {
+            "matchPackageNames": ["dotnet-sdk"],
+            "enabled": false
+        },
+        {
             "matchDatasources": ["docker"],
             "matchPackageNames": ["postgres", "docker.io/library/postgres", "**/postgres"],
             "matchUpdateTypes": ["major"],
