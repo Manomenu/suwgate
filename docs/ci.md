@@ -150,9 +150,15 @@ no server and no laptop keeps it running. It takes a token of the release GitHub
 well, and its pushes start their CI. `.github/renovate-global.json` lists the repositories and the one command a post-upgrade
 task may run; `renovate/default.json` is the shared preset every repository gets from it (no repository needs a `renovate.json`).
 
-- New and updated pull requests only on Monday before 6:00 Warsaw time (`schedule`): every dependency of a repository, ours and
-  third-party, majors too, in one pull request that jumps straight to the latest versions (`group:all`). A version released
-  during the week updates the open pull request instead of opening another.
+- New and updated pull requests only on Monday before 6:00 Warsaw time (`schedule`), at most two per repository, each jumping
+  straight to the latest versions: one with every minor and patch update, ours and third-party, and one with every major update.
+  Apart, so that a major that breaks the build (a red pull request) does not hold back the minor updates, which are almost always
+  green. A version released during the week updates the open pull request instead of opening another.
+- A version hold (`allowedVersions` in the preset) follows the peer range of the package that limits it, written in
+  `renovate/holds.json`: TypeScript takes what the latest typescript-eslint accepts (its lint and the comment guards load it). The
+  `holds` job of the same workflow runs `ci/renovate-holds.sh` on every run and fails, naming the range to set, once that package
+  moves its peer range, and when a hold has no entry in `holds.json`: a hold is lifted the week its reason goes, not when someone
+  remembers, and GitHub mails the failed run.
 - The .NET platform stays on its major (`Microsoft.AspNetCore.*`, `Microsoft.Extensions.*`, Entity Framework, `System.*`, the SDK
   in `global.json` and the .NET images): a new major of .NET is a migration of every project's target framework, decided by a
   person, not a bump; its packages of the next major do not even restore on the current one, which would fail the whole pull request.

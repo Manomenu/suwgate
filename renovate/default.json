@@ -1,6 +1,6 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "extends": ["group:all", ":disableDependencyDashboard"],
+    "extends": [":disableDependencyDashboard"],
     "timezone": "Europe/Warsaw",
     "schedule": ["* 0-5 * * 1"],
     "automerge": true,
@@ -12,6 +12,18 @@
     },
     "packageRules": [
         {
+            "matchPackageNames": ["*"],
+            "groupName": "all non-major dependencies",
+            "groupSlug": "all-minor-patch",
+            "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest", "lockFileMaintenance"]
+        },
+        {
+            "matchPackageNames": ["*"],
+            "groupName": "all major dependencies",
+            "groupSlug": "all-major",
+            "matchUpdateTypes": ["major"]
+        },
+        {
             "matchPackageNames": [
                 "Microsoft.AspNetCore.*",
                 "Microsoft.Extensions.*",
@@ -22,6 +34,10 @@
             ],
             "matchUpdateTypes": ["major"],
             "enabled": false
+        },
+        {
+            "matchPackageNames": ["typescript"],
+            "allowedVersions": ">=4.8.4 <6.1.0"
         },
         {
             "matchPackageNames": ["@maniumek/suwgate"],
