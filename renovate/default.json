@@ -50,6 +50,10 @@
             "enabled": false
         },
         {
+            "matchManagers": ["pip_requirements"],
+            "enabled": false
+        },
+        {
             "matchPackageNames": ["typescript"],
             "allowedVersions": ">=4.8.4 <6.1.0"
         },
