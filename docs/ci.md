@@ -169,6 +169,9 @@ task may run; `renovate/default.json` is the shared preset every repository gets
   pg_upgrade, of every local volume) and moves where the data lives from 18 on, so it is a migration a person starts.
 - A stack that comes from another project, such as Langfuse's compose file in suwchatbot, keeps the versions that project ships
   together (`**/langfuse/**` is left alone): its database, cache and ClickHouse are tested together upstream, not one by one here.
+- Python requirements files are left alone: the ones in the stack pin a tool's environment with `--hash` lines (suwchatbot's
+  xgrammar for the grammar step), and Renovate moved a version without its hashes, which pip refuses. They are regenerated with
+  their hashes on purpose.
 - Renovate merges a pull request itself once its checks are green, on one of its runs every six hours (`platformAutomerge: false`:
   GitHub's own auto-merge needs required status checks, which a private repository on the free plan cannot have, and without them
   it could merge before CI ran). A red pull request stays open: fix it on its branch with what the changesets of the new versions
