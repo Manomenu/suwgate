@@ -7,15 +7,32 @@
     "automergeType": "pr",
     "automergeStrategy": "merge-commit",
     "platformAutomerge": false,
-    "vulnerabilityAlerts": { "enabled": true },
+    "vulnerabilityAlerts": {
+        "enabled": true
+    },
     "packageRules": [
+        {
+            "matchPackageNames": [
+                "Microsoft.AspNetCore.*",
+                "Microsoft.Extensions.*",
+                "Microsoft.EntityFrameworkCore*",
+                "System.*",
+                "dotnet-sdk",
+                "mcr.microsoft.com/dotnet/**"
+            ],
+            "matchUpdateTypes": ["major"],
+            "enabled": false
+        },
         {
             "matchPackageNames": ["@maniumek/suwgate"],
             "postUpgradeTasks": {
                 "commands": ["npx --yes @maniumek/suwgate@{{{newVersion}}} agents-shared"],
                 "fileFilters": ["AGENTS.shared.md"],
                 "executionMode": "update",
-                "installTools": { "node": {}, "npm": {} }
+                "installTools": {
+                    "node": {},
+                    "npm": {}
+                }
             }
         }
     ]

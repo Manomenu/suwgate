@@ -153,6 +153,9 @@ task may run; `renovate/default.json` is the shared preset every repository gets
 - New and updated pull requests only on Monday before 6:00 Warsaw time (`schedule`): every dependency of a repository, ours and
   third-party, majors too, in one pull request that jumps straight to the latest versions (`group:all`). A version released
   during the week updates the open pull request instead of opening another.
+- The .NET platform stays on its major (`Microsoft.AspNetCore.*`, `Microsoft.Extensions.*`, Entity Framework, `System.*`, the SDK
+  in `global.json` and the .NET images): a new major of .NET is a migration of every project's target framework, decided by a
+  person, not a bump; its packages of the next major do not even restore on the current one, which would fail the whole pull request.
 - Renovate merges a pull request itself once its checks are green, on one of its runs every six hours (`platformAutomerge: false`:
   GitHub's own auto-merge needs required status checks, which a private repository on the free plan cannot have, and without them
   it could merge before CI ran). A red pull request stays open: fix it on its branch with what the changesets of the new versions
@@ -160,7 +163,8 @@ task may run; `renovate/default.json` is the shared preset every repository gets
 - An upgrade of `@maniumek/suwgate` runs `suwgate agents-shared` of the new version, so the pull request carries the new
   `AGENTS.shared.md` and the `agents-shared` guard stays green.
 - Run it by hand from the Actions tab (or `gh workflow run renovate.yml -R Manomenu/suwgate -f now=true`): `now` opens and updates
-  pull requests at once, outside the Monday schedule.
+  pull requests at once, outside the Monday schedule, and `debug` logs at debug level. The first step lists the repositories the
+  App's installation reaches.
 - Security updates skip the schedule (`vulnerabilityAlerts`) once a repository has Dependabot alerts on.
 - What the App needs, besides what the releases use: Administration read, Checks, Commit statuses, Issues and Workflows read and
   write, Dependabot alerts read, and an installation on every repository the global config lists.
