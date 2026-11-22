@@ -23,45 +23,21 @@ public sealed class DotnetProfile : IGuardProfile
         var layers = new Lazy<LayersFile>(() => ReadLayers(repository));
         var sources = new Lazy<IReadOnlyList<SourceFile>>(repository.CSharpSources);
         Assembly[] all = [.. inputs.Production, .. inputs.Tests];
-        return
-        [
-            new(Layers.GuardId, () => new Layers(layers.Value, Production(inputs))),
-            new(
-                Endpoints.GuardId,
-                () =>
-                {
-                    var server = Server(inputs);
-                    return new Endpoints(server.Assembly, server.Namespace ?? "", "Endpoints");
-                }
-            ),
-            new(ProjectReferences.GuardId, () => new ProjectReferences(repository, Solution(repository), layers.Value)),
-            new(EveryProjectGuarded.GuardId, () => new EveryProjectGuarded(layers.Value, all)),
-            new(InterfacesHaveTwoImplementations.GuardId, () => InterfacesHaveTwoImplementations.Of(all)),
-            new(NothingObsolete.GuardId, () => new NothingObsolete(all)),
-            new(
-                NoUnusedTypes.GuardId,
-                () =>
-                {
-                    var names = new ProjectNames(repository);
-                    var production = Production(inputs);
-                    return new NoUnusedTypes(
-                        production,
-                        EntryPoints(inputs),
-                        [.. production.Select(assembly => names.RootNamespaceOfAssembly(assembly.GetName().Name ?? ""))],
-                        sources.Value
-                    );
-                }
-            ),
-            new(ForbiddenTypeNames.GuardId, () => ForbiddenTypeNames.Of(all)),
-            new(UniqueTypeNames.GuardId, () => UniqueTypeNames.Of(all)),
-            new(OneTypePerFile.GuardId, () => new OneTypePerFile(sources.Value)),
-            new(NoEscapeHatches.GuardId, () => new NoEscapeHatches(sources.Value, NullForgivingInTests(context.Settings))),
-            new(
-                NoFixtureInField.GuardId,
-                () => new NoFixtureInField([.. sources.Value.Where(file => file.InTestProject)], inputs.ServerTypes, inputs.ClassFixture)
-            ),
-            new(BuildSettings.GuardId, () => new BuildSettings(repository)),
-        ];
+        return [new(Layers.GuardId, () => new Layers(layers.Value, Production(inputs))), new(Endpoints.GuardId, () =>
+            {
+                var server = Server(inputs);
+                return new Endpoints(server.Assembly, server.Namespace ?? "", "Endpoints");
+            }), new(ProjectReferences.GuardId, () => new ProjectReferences(repository, Solution(repository), layers.Value)), new(EveryProjectGuarded.GuardId, () => new EveryProjectGuarded(layers.Value, all)), new(InterfacesHaveTwoImplementations.GuardId, () => InterfacesHaveTwoImplementations.Of(all)), new(NothingObsolete.GuardId, () => new NothingObsolete(all)), new(NoUnusedTypes.GuardId, () =>
+            {
+                var names = new ProjectNames(repository);
+                var production = Production(inputs);
+                return new NoUnusedTypes(
+                    production,
+                    EntryPoints(inputs),
+                    [.. production.Select(assembly => names.RootNamespaceOfAssembly(assembly.GetName().Name ?? ""))],
+                    sources.Value
+                );
+            }), new(ForbiddenTypeNames.GuardId, () => ForbiddenTypeNames.Of(all)), new(UniqueTypeNames.GuardId, () => UniqueTypeNames.Of(all)), new(OneTypePerFile.GuardId, () => new OneTypePerFile(sources.Value)), new(NoEscapeHatches.GuardId, () => new NoEscapeHatches(sources.Value, NullForgivingInTests(context.Settings))), new(NoFixtureInField.GuardId, () => new NoFixtureInField([.. sources.Value.Where(file => file.InTestProject)], inputs.ServerTypes, inputs.ClassFixture)), new(BuildSettings.GuardId, () => new BuildSettings(repository))];
     }
 
     private static Assembly[] Production(GuardInputs inputs) =>
