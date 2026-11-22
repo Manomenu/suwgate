@@ -31,7 +31,7 @@ export const openApiVersions: Guard = {
                 target: file,
                 message:
                     library === undefined
-                        ? `${TOOL} ${tool} loads the server's ${LIBRARY}, which only comes in through a package (Suwbackkit.Server) and can be another release, so the build of the contract fails with a Microsoft.OpenApi version mismatch: pin it beside the tool, ${pin} (transitive pinning makes it win), so an update moves both`
+                        ? `${TOOL} ${tool} loads the server's ${LIBRARY}, which only comes in through a package (Suwbackkit.Server) and can be another release, so the build of the contract fails with a Microsoft.OpenApi version mismatch: pin it beside the tool, ${pin}, and reference it from the server's project (<PackageReference Include="${LIBRARY}" />, which unused-nuget-versions asks for), so an update moves both`
                         : `${TOOL} is ${tool} but ${LIBRARY} is ${library}: the tool loads the server's OpenAPI library and fails on a Microsoft.OpenApi version mismatch, so give both the same version`,
             },
         ];
