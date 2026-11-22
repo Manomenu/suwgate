@@ -383,7 +383,7 @@ pre.out { font: 12px/1.5 var(--mono); background: var(--code-bg); border: 1px so
 <b>PASS</b> suwgate step dotnet-test:
   all 2 steps in 55s
   (14 exceptions in suwgate.yml)</div></div>
-    <div class="stats"><div><b>4</b><span>profiles: web, library, dotnet, database</span></div><div><b>25</b><span>steps the profiles bring</span></div><div><b>35</b><span>repository guards</span></div><div><b>14</b><span>.NET guards in xUnit</span></div><div><b>3</b><span>hooks for agents and git</span></div><div><b>3</b><span>reusable CI workflows</span></div></div>
+    <div class="stats"><div><b>4</b><span>profiles: web, library, dotnet, database</span></div><div><b>25</b><span>steps the profiles bring</span></div><div><b>36</b><span>repository guards</span></div><div><b>14</b><span>.NET guards in xUnit</span></div><div><b>3</b><span>hooks for agents and git</span></div><div><b>3</b><span>reusable CI workflows</span></div></div>
   </div>
 </section>
 
@@ -452,7 +452,7 @@ pre.out { font: 12px/1.5 var(--mono); background: var(--code-bg); border: 1px so
 
 <section id="guards">
   <h2>The guards</h2>
-  <div class="group">🧭 Repository guards (35, in-process, the step guards)</div>
+  <div class="group">🧭 Repository guards (36, in-process, the step guards)</div>
   <div class="cards" style="--cols:5">
     <div><span class="ico">🤖</span><h4>Agents</h4><p>agents-shared · agents-file · hooks · human-docs · docs-paths</p></div>
     <div><span class="ico">📁</span><h4>Layout and names</h4><p>repository-layout · forbidden-names · required-files · just-modules</p></div>
@@ -461,7 +461,7 @@ pre.out { font: 12px/1.5 var(--mono); background: var(--code-bg); border: 1px so
     <div><span class="ico">📦</span><h4>Dependencies</h4><p>banned-npm-packages · banned-nuget-packages · unused-nuget-versions · dependency-direction</p></div>
     <div><span class="ico">💬</span><h4>No comments</h4><p>comments-hash · -css · -json · -markup · -sql · -csharp · -eslint · no-in-place-switches</p></div>
     <div><span class="ico">⏱️</span><h4>Tests</h4><p>test-timing: tests drive a fake clock, never real time</p></div>
-    <div><span class="ico">🧩</span><h4>Kits wired</h4><p>suwfrontkit-wiring · suwbackkit-wiring · no-raw-colors · appsettings-bound</p></div>
+    <div><span class="ico">🧩</span><h4>Kits wired</h4><p>suwfrontkit-wiring · suwbackkit-wiring · openapi-versions · no-raw-colors · appsettings-bound</p></div>
     <div><span class="ico">🗄️</span><h4>Database</h4><p>connection-host · migrations-unchanged</p></div>
     <div><span class="ico">🎯</span><h4>Criteria</h4><p>criteria-kinds: a repository's own kinds of guardrail are explained</p></div>
   </div>
