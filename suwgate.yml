@@ -9,6 +9,9 @@ steps:
       title: the built CLI starts (node dist/cli.js --version after pnpm run build)
       run: pnpm run build >/dev/null && node dist/cli.js --version
       after: [publint]
+    - name: renovate-holds
+      title: every version hold of the Renovate preset is listed in renovate/holds.json (ci/renovate-holds.sh --check)
+      run: ./ci/renovate-holds.sh --check
 guards:
   skip:
     - guard: architecture/layers
