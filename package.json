@@ -46,7 +46,7 @@
     "engines": {
         "node": ">=24"
     },
-    "packageManager": "pnpm@11.24.0",
+    "packageManager": "pnpm@12.21.0",
     "scripts": {
         "build": "tsc -p tsconfig.build.json && mkdir -p dist/profiles/presets/tsconfig && cp -r src/profiles/presets/tsconfig/. dist/profiles/presets/tsconfig/",
         "changeset": "changeset",
@@ -92,7 +92,7 @@
         "knip": "^6.46.1",
         "prettier": "^3.10.1",
         "publint": "0.3.25",
-        "typescript": "5.9.3",
+        "typescript": "7.0.2",
         "typescript-eslint": "^8.73.0",
         "vitest": "5.1.1"
     },
