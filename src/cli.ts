@@ -3,12 +3,13 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import { check, step } from "./gate/check.ts";
-import { dev } from "./dev/index.ts";
+import type { ApiDiscovery } from "./dev/apiTypes.ts";
+import { dev, realEnvironment } from "./dev/index.ts";
 import { loadConfig, type Catalog } from "./gate/config.ts";
 import { PROFILES } from "./gate/contract.ts";
 import { repositoryRoot } from "./gate/repository.ts";
 import { guards, SHARED_RULES, writeSharedRules } from "./guards/index.ts";
-import { dotnetGuards, stepsFor, verdict } from "./profiles/index.ts";
+import { discoverApiIn, dotnetGuards, stepsFor, verdict } from "./profiles/index.ts";
 import { guardEdit, type EditHookProject, type EditHookSettings } from "./session/guardEdit.ts";
 import { preCommit, runTool } from "./session/preCommit.ts";
 import { stop } from "./session/stop.ts";
@@ -28,9 +29,10 @@ const USAGE = `usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [
                            (CLAUDE_PROJECT_DIR, else the git checkout it runs in), with the lists of its profiles
   suwgate hook stop        Claude Code Stop hook: runs the quick gate unless nothing changed since it last passed
   suwgate hook pre-commit  git pre-commit hook: gitleaks on the staged changes, then the quick gate
-  suwgate dev <db|logs|smoke|server|tmux|sibling|checkout-env>
+  suwgate dev <db|logs|smoke|server|tmux|sibling|api-types|slow-tests|checkout-env>
                            the local stack of the repository (the dev section of suwgate.yml), and the images of the
-                           sibling repositories it runs, rebuilt from their checkouts when stale; suwgate dev --help
+                           sibling repositories it runs, rebuilt from their checkouts when stale, the API contract and types regenerated
+                           from the server, and a report of the slowest .NET tests; suwgate dev --help
   suwgate agents-shared    writes AGENTS.shared.md, the rules every repository shares, as this suwgate ships it, into the
                            repository root (the agents-shared guard fails until the copy is current)
   suwgate verdict <tests|guards|tsconfig|eslint> ...
@@ -51,6 +53,15 @@ function editHookProject(root: string): EditHookProject {
     if (!("config" in loaded)) return { root, profiles: PROFILES, settings: {} };
     const settings = loaded.config.settings["hooks"] as EditHookSettings | undefined;
     return { root, profiles: loaded.config.profiles, settings: settings ?? {} };
+}
+
+function discoverApi(cwd: string): ApiDiscovery {
+    const root = repositoryRoot(cwd) ?? cwd;
+    const loaded = loadConfig(root, catalog);
+    if (!("config" in loaded)) return { problem: `suwgate.yml is not valid: ${loaded.problems.join("; ")}` };
+    const { profiles, directories, configure } = loaded.config;
+    const layout = discoverApiIn({ root, profiles, directories, contractSettings: configure["api-contract"]?.settings });
+    return "problem" in layout ? layout : { root, layout };
 }
 
 function readInput(): string {
@@ -90,7 +101,7 @@ async function runStep(argv: readonly string[]): Promise<number> {
 }
 
 async function main(argv: readonly string[]): Promise<number> {
-    if (argv[0] === "dev") return dev(argv.slice(1));
+    if (argv[0] === "dev") return dev(argv.slice(1), realEnvironment(discoverApi));
     if (argv[0] === "step") return runStep(argv.slice(1));
     if (argv[0] === "verdict") {
         const result = verdict(argv.slice(1));

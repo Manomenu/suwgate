@@ -86,13 +86,15 @@ its reason. The .NET guards and build defaults: [Suwgate.Architecture](dotnet/Su
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/visual/board/img/readme/dev-dark.png">
-  <img alt="suwgate dev: the local stack. db (up, down, reset, psql, logs, status): the PostgreSQL of the compose file, or your own script. server (dotnet watch): restarted when it exits, output teed to a JSON log. tmux (start [--restart], stop): shell, server and web app in one session. logs (why did it fail?): the last warnings and errors; --trace one request. smoke (read-only requests): --ci builds and starts its own stack on free ports. checkout-env (eval in a worktree): own test databases and e2e ports per linked worktree. sibling (image, up, rebuild, down, status), new: a sibling repository's images, rebuilt when its checkout moved on. dev: in suwgate.yml: only name is required; portOffset keeps repositories on one machine apart." src="docs/visual/board/img/readme/dev-light.png" width="100%">
+  <img alt="suwgate dev: the local stack. db (up, down, reset, psql, logs, status): the PostgreSQL of the compose file, or your own script. server (dotnet watch): restarted when it exits, output teed to a JSON log. tmux (start [--restart], stop): shell, server and web app in one session. logs (why did it fail?): the last warnings and errors; --trace one request. smoke (read-only requests): --ci builds and starts its own stack on free ports. checkout-env (eval in a worktree): own test databases and e2e ports per linked worktree. sibling (image, up, rebuild, down, status): a sibling repository's images, rebuilt when its checkout moved on. api-types, new: regenerates the API contract and the web app's types, as the api-contract step generates them. slow-tests (-n count), new: a report of the slowest .NET tests. dev: in suwgate.yml: only name is required; portOffset keeps repositories on one machine apart." src="docs/visual/board/img/readme/dev-light.png" width="100%">
 </picture>
 
 ```sh
 suwgate dev tmux start                 # the whole local stack in one tmux session
 eval "$(suwgate dev checkout-env)"     # in a linked worktree: its own test databases and e2e ports
 suwgate dev sibling suwagcms up        # a sibling's images, rebuilt if its checkout moved on, then started
+suwgate dev api-types                  # the API contract and the web app's types, from the server
+suwgate dev slow-tests -n 20           # which .NET tests take the longest
 ```
 
 Every subcommand answers `--help`. The `dev` section and what each command does: [docs/dev.md](docs/dev.md).
@@ -147,9 +149,10 @@ usage: suwgate check [--quick] [--verbose] | suwgate step [<id> [--only] [--verb
                            (CLAUDE_PROJECT_DIR, else the git checkout it runs in), with the lists of its profiles
   suwgate hook stop        Claude Code Stop hook: runs the quick gate unless nothing changed since it last passed
   suwgate hook pre-commit  git pre-commit hook: gitleaks on the staged changes, then the quick gate
-  suwgate dev <db|logs|smoke|server|tmux|sibling|checkout-env>
+  suwgate dev <db|logs|smoke|server|tmux|sibling|api-types|slow-tests|checkout-env>
                            the local stack of the repository (the dev section of suwgate.yml), and the images of the
-                           sibling repositories it runs, rebuilt from their checkouts when stale; suwgate dev --help
+                           sibling repositories it runs, rebuilt from their checkouts when stale, the API contract and types regenerated
+                           from the server, and a report of the slowest .NET tests; suwgate dev --help
   suwgate agents-shared    writes AGENTS.shared.md, the rules every repository shares, as this suwgate ships it, into the
                            repository root (the agents-shared guard fails until the copy is current)
   suwgate verdict <tests|guards|tsconfig|eslint> ...

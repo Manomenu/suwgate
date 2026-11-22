@@ -488,14 +488,16 @@ pre.out { font: 12px/1.5 var(--mono); background: var(--code-bg); border: 1px so
 
 <section id="dev">
   <h2>suwgate dev: the local stack</h2>
-  <div class="cards" style="--cols:4">
+  <div class="cards" style="--cols:5">
     <div><span class="ico">🐘</span><h4><code>db</code></h4><p class="when">up · down · reset · psql · logs · status</p><p>the PostgreSQL of the compose file, or your own script</p></div>
     <div><span class="ico">🚀</span><h4><code>server</code></h4><p class="when">dotnet watch</p><p>restarted when it exits, output teed to a JSON log</p></div>
     <div><span class="ico">🪟</span><h4><code>tmux</code></h4><p class="when">start [--restart] · stop</p><p>shell, server and web app in one session</p></div>
     <div><span class="ico">📋</span><h4><code>logs</code></h4><p class="when">why did it fail?</p><p>the last warnings and errors; <code>--trace</code> one request</p></div>
     <div><span class="ico">💨</span><h4><code>smoke</code></h4><p class="when">read-only requests</p><p><code>--ci</code> builds and starts its own stack on free ports</p></div>
     <div><span class="ico">🌿</span><h4><code>checkout-env</code></h4><p class="when">eval in a worktree</p><p>own test databases and e2e ports per linked worktree</p></div>
-    <div><span class="ico">👯</span><h4><code>sibling</code></h4><p class="when">image · up · rebuild · down · status</p><p>a sibling repository's images, rebuilt when its checkout moved on</p><div class="foot"><span class="tag ok">new</span></div></div>
+    <div><span class="ico">👯</span><h4><code>sibling</code></h4><p class="when">image · up · rebuild · down · status</p><p>a sibling repository's images, rebuilt when its checkout moved on</p></div>
+    <div><span class="ico">🧬</span><h4><code>api-types</code></h4><p class="when">after an API change</p><p>regenerates the API contract and the web app's types, as the api-contract step does</p><div class="foot"><span class="tag ok">new</span></div></div>
+    <div><span class="ico">🐢</span><h4><code>slow-tests</code></h4><p class="when">-n count · a report</p><p>which .NET tests take the longest</p><div class="foot"><span class="tag ok">new</span></div></div>
     <div><span class="ico">🧾</span><h4><code>dev:</code> in suwgate.yml</h4><p class="when">only <code>name</code> is required</p><p><code>portOffset</code> keeps repositories on one machine apart</p></div>
   </div>
 </section>

@@ -75,19 +75,59 @@ function webApp(context: StepContext): string | null {
     return existsSync(path.join(directory, API_TYPES)) ? directory : null;
 }
 
-export function apiContract(context: StepContext): string | null {
+export interface ApiLayout {
+    cwd: string;
+    contract: string;
+    server: string;
+    name: string;
+    web: string | null;
+}
+
+export interface ApiProblem {
+    problem: string;
+}
+
+function discoverApi(context: StepContext): ApiLayout | ApiProblem {
     const contract = contractOf(context);
-    if (!has(context, contract)) return null;
     const servers = tracked(context, ["*.csproj"]).filter((project) => (read(context, project) ?? "").includes(GENERATOR));
     const [server, ...others] = servers;
-    if (server === undefined) return fail(`${contract} is there, but no project writes it: reference ${GENERATOR} in the server's project`);
-    if (others.length > 0)
-        return fail(
-            `${contract} has more than one project that could write it (${servers.join(", ")}): keep ${GENERATOR} in the server's project only`,
-        );
-    const name = path.basename(server, ".csproj");
+    if (server === undefined) return { problem: `no project writes ${contract}: reference ${GENERATOR} in the server's project` };
+    if (others.length > 0) {
+        return {
+            problem: `${contract} has more than one project that could write it (${servers.join(", ")}): keep ${GENERATOR} in the server's project only`,
+        };
+    }
+    return { cwd: context.cwd, contract, server, name: path.basename(server, ".csproj"), web: webApp(context) };
+}
+
+export interface ApiRepository {
+    root: string;
+    profiles: StepContext["profiles"];
+    directories: StepContext["directories"];
+    contractSettings: unknown;
+}
+
+export function discoverApiIn(repository: ApiRepository): ApiLayout | ApiProblem {
+    const settings = repository.contractSettings === undefined ? {} : { [API_CONTRACT]: repository.contractSettings };
+    return discoverApi({
+        root: repository.root,
+        cwd: path.join(repository.root, repository.directories.dotnet ?? ""),
+        quick: false,
+        profiles: repository.profiles,
+        directories: repository.directories,
+        skippedSteps: [],
+        skippedGuards: [],
+        settings,
+        changed: () => [],
+    });
+}
+
+export function apiContract(context: StepContext): string | null {
+    if (!has(context, contractOf(context))) return null;
+    const found = discoverApi(context);
+    if ("problem" in found) return fail(found.problem);
+    const { contract, server, name, web } = found;
     const document = `"$work"/${quoted(`${name}.json`)}`;
-    const web = webApp(context);
     const types = web === null ? "" : path.join(web, API_TYPES);
     return script([
         NO_IDLE_BUILD_PROCESSES,
@@ -104,7 +144,7 @@ export function apiContract(context: StepContext): string | null {
                   `(cd ${quoted(web)} && pnpm exec openapi-typescript ${document} --output "$work/schema.d.ts" >/dev/null)`,
                   `if ! head -n 1 ${quoted(types)} | grep -q "sha256 $digest" || ! tail -n +2 ${quoted(types)} | diff -q - "$work/schema.d.ts" >/dev/null; then stale+=(${quoted(path.relative(context.root, types))}); fi`,
               ]),
-        'if [ ${#stale[@]} -gt 0 ]; then echo "${stale[*]} out of date with the server\'s API — regenerate them (just api-types)" >&2; exit 1; fi',
+        'if [ ${#stale[@]} -gt 0 ]; then echo "${stale[*]} out of date with the server\'s API — regenerate them (suwgate dev api-types)" >&2; exit 1; fi',
         `echo "API contract${web === null ? "" : " and types"} up to date"`,
     ]);
 }
@@ -132,7 +172,7 @@ function apiVersionScript(contract: string, breaking: VersionSettings["breaking"
         "trap 'rm -rf \"$work\"' EXIT",
         `if ! git show "$base:./${contract}" >"$work/base.json" 2>/dev/null; then echo "no ${contract} on $base yet; nothing to compare against."; exit 0; fi`,
         `if git diff --quiet --no-index "$work/base.json" ${contract} 2>/dev/null; then echo "API contract unchanged since $base"; exit 0; fi`,
-        `if ! oasdiff breaking "$work/base.json" ${contract} >"$work/load.log" 2>&1; then cat "$work/load.log" >&2; echo "oasdiff could not compare the documents (see above); is ${contract} valid JSON? Regenerate it (just api-types)" >&2; exit 1; fi`,
+        `if ! oasdiff breaking "$work/base.json" ${contract} >"$work/load.log" 2>&1; then cat "$work/load.log" >&2; echo "oasdiff could not compare the documents (see above); is ${contract} valid JSON? Regenerate it (suwgate dev api-types)" >&2; exit 1; fi`,
         `version_of() { node -e 'let text = ""; process.stdin.on("data", (chunk) => (text += chunk)).on("end", () => console.log(JSON.parse(text).version));'; }`,
         `now="$(version_of <${versionFile} 2>/dev/null || true)"`,
         `was="$(git show "$base:./${versionFile}" 2>/dev/null | version_of 2>/dev/null || true)"`,

@@ -7,6 +7,7 @@ import { librarySteps } from "./library.ts";
 import { nodeSteps } from "./node.ts";
 import { webSteps } from "./web.ts";
 
+export { discoverApiIn } from "./contract.ts";
 export { dotnetGuards } from "./dotnetGuards.ts";
 export { verdict } from "./verdict.ts";
 
