@@ -108,6 +108,12 @@ export function gitCheckout(root: string): GitCheckout {
     return { repository: commonDir, linked: gitDir !== commonDir };
 }
 
+export function checkoutEnvOf(settings: DevSettings, env: Readonly<Record<string, string | undefined>>): CheckoutEnv {
+    const ci = (env["CI"] ?? "") !== "";
+    const checkout = ci ? { repository: settings.root, linked: false } : gitCheckout(settings.root);
+    return checkoutEnv({ checkoutName: path.basename(settings.root), ...checkout, ci, env, settings });
+}
+
 export function runCheckoutEnv(
     args: readonly string[],
     settings: DevSettings,
@@ -118,15 +124,7 @@ export function runCheckoutEnv(
         io.err(CHECKOUT_ENV_USAGE);
         return 2;
     }
-    const ci = (env["CI"] ?? "") !== "";
-    const checkout = ci ? { repository: settings.root, linked: false } : gitCheckout(settings.root);
-    const result = checkoutEnv({
-        checkoutName: path.basename(settings.root),
-        ...checkout,
-        ci,
-        env,
-        settings,
-    });
+    const result = checkoutEnvOf(settings, env);
     io.out(exportLines(result.variables));
     if (result.notice !== null) io.err(result.notice);
     return 0;

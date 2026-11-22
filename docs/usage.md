@@ -1,7 +1,7 @@
 # Using suwgate
 
 The reference for a repository that installs `@maniumek/suwgate`: the gate and its configuration, the hooks, the shared rules
-for agents, the tool presets and the .NET guards. The local stack (`suwgate dev`) is in [dev.md](dev.md), the CI workflows and
+for agents, the tool presets and the .NET guards. The local stack (`suwgate dev`, with `api-types` and `slow-tests`) is in [dev.md](dev.md), the CI workflows and
 Renovate in [ci.md](ci.md).
 
 ## Run the gate

@@ -17,6 +17,7 @@ function environment(load: DevEnvironment["loadSettings"] = () => settingsOf()):
         interactive: false,
         ask: () => Promise.resolve(""),
         loadSettings: load,
+        discoverApi: () => ({ problem: "no project writes contract/openapi.json" }),
         temporaryFile: (name) => `/tmp/${name}`,
         onInterrupt: () => () => undefined,
     };
@@ -37,7 +38,7 @@ describe("suwgate dev", () => {
         expect(err[0]).toContain('no command "nope"');
     });
 
-    it.each(["db", "logs", "smoke", "server", "tmux", "sibling", "checkout-env"])(
+    it.each(["db", "logs", "smoke", "server", "tmux", "sibling", "api-types", "slow-tests", "checkout-env"])(
         "prints the help of %s without reading suwgate.yml",
         async (command) => {
             const { env, out } = environment(() => {
@@ -47,6 +48,13 @@ describe("suwgate dev", () => {
             expect(out[0]).toContain(`suwgate dev ${command === "checkout-env" ? "" : command}`.trim());
         },
     );
+
+    it("exits 2 with the problem of the discovery for api-types", async () => {
+        const { env, err } = environment();
+        expect(await dev(["api-types"], env)).toBe(2);
+        expect(err).toEqual(["suwgate dev api-types: no project writes contract/openapi.json"]);
+        expect(await dev(["api-types", "now"], env)).toBe(2);
+    });
 
     it("exits 2 with the usage on a wrong argument, and with the failure's own code", async () => {
         const wrong = environment();

@@ -13,11 +13,13 @@ suwgate dev smoke [<base-url> | --ci]
 suwgate dev server [dotnet run arguments]
 suwgate dev tmux start [--restart] | stop
 suwgate dev sibling [<name> image | up | rebuild | down | status]
+suwgate dev api-types                           # the API contract and the web app's types, regenerated from the server
+suwgate dev slow-tests [-n <count>]             # a report: which .NET tests take the longest
 eval "$(suwgate dev checkout-env)"
 ```
 
 Every command takes `--help`, which works without a `dev` section. Exit codes: 0 done, 1 failed (a smoke check, a missing log,
-the database did not start), 2 a usage problem or a problem of `suwgate.yml`.
+the database did not start, a build or a test), 2 a usage problem or a problem of `suwgate.yml`.
 
 ## The `dev` section of suwgate.yml
 
@@ -90,6 +92,20 @@ and suwageval -70.
   ports); a linked git worktree gets its own e2e and test databases and its own e2e port pair, from a hash of the repository's
   git directory and the worktree's directory name, so worktrees with the same name in two repositories never share a port or a
   database, and one worktree gets the same ones on every run. A value already in the environment wins. The builds also stop leaving MSBuild workers behind.
+
+- `api-types` regenerates the API contract and the web app's types, exactly as the `api-contract` step of `suwgate check` does to
+  compare them, from one discovery shared with the step, so the two cannot disagree: the contract is `settings.contract` of
+  `api-contract` (default `contract/openapi.json`, relative to `directories.dotnet`), the server is the one project that references
+  `Microsoft.Extensions.ApiDescription.Server` (none or several: exit 2 with the fix), the web app is `directories.web` when it has
+  `src/api/openapi.d.ts`. It builds the server so that the build writes the document (no database needed), copies it to the contract
+  path and, with a web app, writes `src/api/openapi.d.ts`: a first line naming the contract and its sha256, then what
+  `openapi-typescript` generates. It needs no `dev` section. It prints the paths written, relative to the root. A repository that
+  kept `scripts/.internal/api-types.sh` deletes it and points its recipe at this command.
+- `slow-tests` is a report, never a check: which .NET tests take the longest. It sets the environment of `checkout-env`, starts the
+  database like `db up`, builds the solution (the one `*.slnx` or `*.sln` in `directories.dotnet`, or in the root; none or several:
+  exit 2), runs `dotnet test --no-build` with an xunit TRX report in `.artifacts/slow-tests` (its output in `run.log` there), and
+  prints `<n> tests, the <k> slowest:` and a line per test with its seconds (`-n` sets `k`, default 10). It exits 1 when a test
+  failed, after the list. A repository that kept `scripts/.internal/slow-tests.sh` deletes it and points its recipe at this command.
 
 ## Siblings: the images of a repository checked out next to this one
 

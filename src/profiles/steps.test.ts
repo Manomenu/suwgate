@@ -7,7 +7,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Profile, Run, Step, StepContext } from "../gate/contract.ts";
-import { contractPins, apiContract } from "./contract.ts";
+import { contractPins, apiContract, discoverApiIn } from "./contract.ts";
 import { criteria, criteriaConfig } from "./criteria.ts";
 import { guardTests, inCheckoutEnv } from "./dotnet.ts";
 import { stepsFor } from "./index.ts";
@@ -555,6 +555,37 @@ describe("the contract steps", () => {
         );
         expect(apiContract(context(repository({ "contract/openapi.json": "{}", "A/A.csproj": server, "B/B.csproj": server })))).toContain(
             "more than one project",
+        );
+    });
+
+    it("tell the dev command where the contract, the server and the web app are, and the step names that command", () => {
+        const root = repository({
+            "Myapp.Server/Myapp.Server.csproj": server,
+            "Myapp.Web/src/api/openapi.d.ts": "",
+            "Myapp.Server/openapi.json": "{}",
+        });
+        const repositoryOf = (contractSettings?: unknown) => ({
+            root,
+            profiles: ["web", "dotnet"] as Profile[],
+            directories: { web: "Myapp.Web" },
+            contractSettings,
+        });
+
+        expect(discoverApiIn(repositoryOf())).toEqual({
+            cwd: root,
+            contract: "contract/openapi.json",
+            server: "Myapp.Server/Myapp.Server.csproj",
+            name: "Myapp.Server",
+            web: path.join(root, "Myapp.Web"),
+        });
+        expect(discoverApiIn(repositoryOf({ contract: "Myapp.Server/openapi.json" }))).toMatchObject({
+            contract: "Myapp.Server/openapi.json",
+        });
+        expect(discoverApiIn({ ...repositoryOf(), root: repository({}) })).toEqual({
+            problem: expect.stringMatching(/^no project writes/) as unknown,
+        });
+        expect(apiContract(context(repository({ "contract/openapi.json": "{}", "A/A.csproj": server })))).toContain(
+            "suwgate dev api-types",
         );
     });
 

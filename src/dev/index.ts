@@ -4,17 +4,19 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 
+import { API_TYPES_USAGE, parseApiTypes, runApiTypes, type DiscoverApi } from "./apiTypes.ts";
 import { askOnTerminal, DB_USAGE, parseDb, runDb } from "./db.ts";
 import { CHECKOUT_ENV_USAGE, runCheckoutEnv } from "./checkoutEnv.ts";
 import { LOGS_USAGE, parseLogs, runLogs } from "./logs.ts";
 import { exec, Failure, UsageError, type Exec, type Io } from "./process.ts";
 import { runServer, SERVER_USAGE } from "./server.ts";
 import { loadSettings, type DevSettings } from "./settings.ts";
+import { parseSlowTests, runSlowTests, SLOW_TESTS_USAGE } from "./slowTests.ts";
 import { parseSibling, runSibling, SIBLING_USAGE } from "./sibling.ts";
 import { parseSmoke, realFetch, runSmoke, runSmokeCi, SMOKE_USAGE, type Fetch, type SmokeCiEnvironment } from "./smoke.ts";
 import { parseTmux, runTmux, TMUX_USAGE } from "./tmux.ts";
 
-export const DEV_USAGE = `usage: suwgate dev <db|logs|smoke|server|tmux|sibling|checkout-env> [arguments]   (every one takes --help)
+export const DEV_USAGE = `usage: suwgate dev <db|logs|smoke|server|tmux|sibling|api-types|slow-tests|checkout-env> [arguments]   (every one takes --help)
 The dev scripts of the template as commands, configured by the dev section of suwgate.yml:
   db            the local PostgreSQL of the compose file: up | down | reset | psql | logs | status
   logs          why did it fail? the last warnings and errors of the server's JSON log
@@ -22,6 +24,8 @@ The dev scripts of the template as commands, configured by the dev section of su
   server        the server under dotnet watch, restarted when it exits
   tmux          the whole local stack in one tmux session: start [--restart] | stop
   sibling       the images of a sibling repository, rebuilt from its checkout when stale: <name> image | up | rebuild | down | status
+  api-types     regenerate the API contract and the web app's types from the server, as the api-contract step generates them
+  slow-tests    a report of the slowest .NET tests: -n <count>, default 10
   checkout-env  eval "$(suwgate dev checkout-env)": own test databases and e2e ports for a linked worktree`;
 
 const USAGES: Readonly<Record<string, string>> = {
@@ -31,6 +35,8 @@ const USAGES: Readonly<Record<string, string>> = {
     server: SERVER_USAGE,
     tmux: TMUX_USAGE,
     sibling: SIBLING_USAGE,
+    "api-types": API_TYPES_USAGE,
+    "slow-tests": SLOW_TESTS_USAGE,
     "checkout-env": CHECKOUT_ENV_USAGE,
 };
 
@@ -45,6 +51,7 @@ export interface DevEnvironment {
     interactive: boolean;
     ask: (question: string) => Promise<string>;
     loadSettings: (cwd: string) => DevSettings;
+    discoverApi: DiscoverApi;
     temporaryFile: SmokeCiEnvironment["temporaryFile"];
     onInterrupt: SmokeCiEnvironment["onInterrupt"];
 }
@@ -82,7 +89,7 @@ function onInterrupt(cleanup: readonly string[]): () => void {
     };
 }
 
-function realEnvironment(): DevEnvironment {
+export function realEnvironment(discoverApi: DiscoverApi): DevEnvironment {
     return {
         cwd: process.cwd(),
         env: process.env,
@@ -96,6 +103,7 @@ function realEnvironment(): DevEnvironment {
         interactive: process.stdin.isTTY,
         ask: askOnTerminal,
         loadSettings: (cwd) => loadSettings(repositoryRootOf(cwd)),
+        discoverApi,
         temporaryFile,
         onInterrupt,
     };
@@ -149,12 +157,20 @@ async function dispatch(command: string, args: readonly string[], environment: D
             const { exec, fetch } = environment;
             return runSibling(parsed, { settings: settings(), exec, fetch, io, pause: environment.pause });
         }
+        case "api-types": {
+            parseApiTypes(args);
+            const found = environment.discoverApi(environment.cwd);
+            if ("problem" in found) throw new Failure(`suwgate dev api-types: ${found.problem}`, 2);
+            return runApiTypes({ root: found.root, layout: found.layout, exec: environment.exec, io });
+        }
+        case "slow-tests":
+            return runSlowTests(parseSlowTests(args), { settings: settings(), env: environment.env, exec: environment.exec, io });
         default:
             return runCheckoutEnv(args, settings(), environment.env, io);
     }
 }
 
-export async function dev(argv: readonly string[], environment: DevEnvironment = realEnvironment()): Promise<number> {
+export async function dev(argv: readonly string[], environment: DevEnvironment): Promise<number> {
     const [command, ...args] = argv;
     if (command === undefined || command === "--help") {
         environment.io.out(DEV_USAGE);
