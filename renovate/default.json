@@ -50,6 +50,17 @@
                     "npm": {}
                 }
             }
+        },
+        {
+            "matchPackageNames": ["csharpier"],
+            "postUpgradeTasks": {
+                "commands": ["dotnet tool restore", "dotnet csharpier format ."],
+                "fileFilters": ["**/*.cs"],
+                "executionMode": "branch",
+                "installTools": {
+                    "dotnet": {}
+                }
+            }
         }
     ]
 }

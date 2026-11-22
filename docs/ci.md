@@ -155,10 +155,10 @@ task may run; `renovate/default.json` is the shared preset every repository gets
   Apart, so that a major that breaks the build (a red pull request) does not hold back the minor updates, which are almost always
   green. A version released during the week updates the open pull request instead of opening another.
 - A version hold (`allowedVersions` in the preset) follows the peer range of the package that limits it, written in
-  `renovate/holds.json`: TypeScript takes what the latest typescript-eslint accepts (its lint and the comment guards load it). The
-  `holds` job of the same workflow runs `ci/renovate-holds.sh` on every run and fails, naming the range to set, once that package
-  moves its peer range, and when a hold has no entry in `holds.json`: a hold is lifted the week its reason goes, not when someone
-  remembers, and GitHub mails the failed run.
+  `renovate/holds.json`: TypeScript takes what the latest typescript-eslint accepts (its lint and the comment guards load it).
+  The `holds` job of the same workflow runs `ci/renovate-holds.sh --update` and, when that package moved its range, opens a pull
+  request with the new hold; a later run merges it once its checks pass. Nobody has to remember a hold. The gate's
+  `renovate-holds` step refuses a hold that `holds.json` does not list, so none is added without what lifts it.
 - The .NET platform stays on its major (`Microsoft.AspNetCore.*`, `Microsoft.Extensions.*`, Entity Framework, `System.*`, the SDK
   in `global.json` and the .NET images): a new major of .NET is a migration of every project's target framework, decided by a
   person, not a bump; its packages of the next major do not even restore on the current one, which would fail the whole pull request.
@@ -166,6 +166,8 @@ task may run; `renovate/default.json` is the shared preset every repository gets
   GitHub's own auto-merge needs required status checks, which a private repository on the free plan cannot have, and without them
   it could merge before CI ran). A red pull request stays open: fix it on its branch with what the changesets of the new versions
   say a repository must change.
+- An upgrade of CSharpier formats the C# code with the new version in the same pull request (`dotnet csharpier format .`), since
+  a new CSharpier formats some code differently and the format step would fail on code nobody changed.
 - An upgrade of `@maniumek/suwgate` runs `suwgate agents-shared` of the new version, so the pull request carries the new
   `AGENTS.shared.md` and the `agents-shared` guard stays green.
 - Run it by hand from the Actions tab (or `gh workflow run renovate.yml -R Manomenu/suwgate -f now=true`): `now` opens and updates

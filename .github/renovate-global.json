@@ -16,5 +16,9 @@
         "Manomenu/suwchatbot"
     ],
     "extends": ["github>Manomenu/suwgate//renovate/default"],
-    "allowedCommands": ["^npx --yes @maniumek/suwgate@[0-9][0-9A-Za-z.+-]* agents-shared$"]
+    "allowedCommands": [
+        "^npx --yes @maniumek/suwgate@[0-9][0-9A-Za-z.+-]* agents-shared$",
+        "^dotnet tool restore$",
+        "^dotnet csharpier format \\.$"
+    ]
 }
